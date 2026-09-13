@@ -1,0 +1,18 @@
+{
+  "name": "きもち日記",
+  "short_name": "きもち日記",
+  "description": "毎日の気分・体調・睡眠を1分で記録する日記。記録はこの端末の中だけに保存します",
+  "lang": "ja",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fdf6f1",
+  "theme_color": "#fdf6f1",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

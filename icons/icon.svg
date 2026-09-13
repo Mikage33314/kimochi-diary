@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- きもち日記のアイコン：芽の出た、にっこり顔。色はアプリのトークン（地・サーモン・濃いサーモン・黒）
+       iPhone は角を自動で丸めるので、地は四角いまま全面に塗る（透明にすると黒く塗られる）。
+       Android のマスク用に、絵は中心から半径 204px（全体の80%）の円の内側に収める -->
+  <rect width="512" height="512" fill="#fdf6f1"/>
+  <!-- 芽 -->
+  <path d="M256 142 C254 120 256 106 262 92" fill="none" stroke="#b8653f" stroke-width="12" stroke-linecap="round"/>
+  <path d="M257 114 C236 86 202 84 186 100 C204 122 236 128 257 114 Z" fill="#b8653f"/>
+  <path d="M261 96 C280 60 322 54 338 72 C324 100 288 112 261 96 Z" fill="#b8653f"/>
+  <!-- 顔 -->
+  <circle cx="256" cy="284" r="148" fill="#e89b77"/>
+  <ellipse cx="184" cy="310" rx="21" ry="13" fill="#ec8078" opacity=".8"/>
+  <ellipse cx="328" cy="310" rx="21" ry="13" fill="#ec8078" opacity=".8"/>
+  <g fill="none" stroke="#222222" stroke-width="11" stroke-linecap="round">
+    <path d="M190 274 Q210 250 230 274"/>
+    <path d="M282 274 Q302 250 322 274"/>
+    <path d="M230 318 Q256 344 282 318"/>
+  </g>
+</svg>

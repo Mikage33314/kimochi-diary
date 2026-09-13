@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>きもち日記</title>
+  <meta name="description" content="毎日の気分・体調・睡眠を1分で記録する日記。記録はこの端末の中だけに保存します">
+  <!-- PWA：ホーム画面に追加したときの名前・アイコン・色 -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="きもち日記">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#fdf6f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1816" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>きもち日記</h1>
+  </header>
+
+  <main>
+    <!-- ===== 記録 ===== -->
+    <!-- tabindex="-1"：JS からフォーカスを移せるようにする（別の画面から移ってきたときなど） -->
+    <section class="view" data-view="record" tabindex="-1" aria-label="記録">
+      <!-- 今日を表示中で、昨日が未記録のときだけ出す -->
+      <button type="button" class="nudge" id="yesterday-nudge" hidden>
+        <span class="nudge-text"></span><span aria-hidden="true">›</span>
+      </button>
+
+      <form id="record-form" class="card">
+        <label class="field">
+          <span class="field-label">日付<span class="date-hint" id="date-hint"></span></span>
+          <input type="date" id="date" required>
+        </label>
+
+        <fieldset class="field">
+          <legend class="field-label">気分</legend>
+          <div class="scale" id="mood-scale"></div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field-label">体調</legend>
+          <div class="scale" id="condition-scale"></div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field-label">睡眠</legend>
+          <div class="sleep-head" aria-hidden="true">
+            <span>寝た時刻</span><span></span><span>起きた時刻</span><span></span>
+          </div>
+          <ul class="sleep-list" id="sleep-list"></ul>
+          <p class="sleep-total" id="sleep-total"></p>
+          <div class="sleep-actions">
+            <button type="button" class="pill-btn" id="same-sleep" hidden></button>
+            <button type="button" class="pill-btn" id="add-sleep">＋ 睡眠時間の追加</button>
+          </div>
+        </fieldset>
+
+        <label class="field">
+          <span class="field-label">ひとことメモ</span>
+          <input type="text" id="memo" maxlength="100" enterkeyhint="done" placeholder="今日はどんな日だった？">
+        </label>
+
+        <label class="field">
+          <span class="field-label">頑張ったこと</span>
+          <textarea id="effort" rows="2" maxlength="200" placeholder="小さなことでもOK"></textarea>
+        </label>
+
+        <!-- 保存ボタンは画面の下に貼りつき、スクロールしなくても押せる。エラーや「編集中」もここに出す。
+             エラーなどは読み上げる枠（status）、「編集中」は読み上げない枠（edit-state）。status に文があるときは edit-state を隠す -->
+        <div class="save-bar">
+          <p id="status" class="status" role="status"></p>
+          <p id="edit-state" class="status"></p>
+          <button type="submit" class="save-btn">保存する</button>
+        </div>
+        <button type="button" class="delete-btn" id="delete-btn" hidden>この日の記録を削除</button>
+      </form>
+    </section>
+
+    <!-- ===== カレンダー ===== -->
+    <section class="view" data-view="calendar" hidden>
+      <div class="card">
+        <div class="month-nav">
+          <button type="button" class="icon-btn" id="cal-prev" aria-label="前の月">‹</button>
+          <h2 class="month-title" id="cal-title"></h2>
+          <button type="button" class="icon-btn" id="cal-next" aria-label="次の月">›</button>
+        </div>
+        <p class="cal-summary" id="cal-summary"></p>
+        <div class="cal-weekdays" aria-hidden="true">
+          <span class="is-sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="is-sat">土</span>
+        </div>
+        <div class="calendar" id="calendar"></div>
+        <div class="mood-legend" id="mood-legend"></div>
+      </div>
+      <div class="card" id="day-detail"></div>
+    </section>
+
+    <!-- ===== グラフ ===== -->
+    <section class="view" data-view="graph" hidden>
+      <div class="segmented" id="period" role="group" aria-label="表示期間">
+        <button type="button" data-mode="week" aria-pressed="true">直近7日</button>
+        <button type="button" data-mode="month" aria-pressed="false">月ごと</button>
+      </div>
+      <div class="month-nav" id="graph-month-nav" hidden>
+        <button type="button" class="icon-btn" id="graph-prev" aria-label="前の月">‹</button>
+        <h2 class="month-title" id="graph-title"></h2>
+        <button type="button" class="icon-btn" id="graph-next" aria-label="次の月">›</button>
+      </div>
+      <p class="stats-note" id="stats-note"></p>
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <div class="chart-head">
+          <h2 class="chart-title">気分・体調</h2>
+          <div class="chart-legend">
+            <span class="key key-mood">気分</span>
+            <span class="key key-condition">体調</span>
+          </div>
+        </div>
+        <svg class="chart" id="chart-mood" viewBox="0 0 360 200" role="img" aria-label="気分と体調の推移"></svg>
+      </div>
+
+      <div class="card">
+        <div class="chart-head">
+          <h2 class="chart-title">睡眠時間</h2>
+          <div class="chart-legend"><span class="key key-sleep">1日の合計</span></div>
+        </div>
+        <svg class="chart" id="chart-sleep" viewBox="0 0 360 170" role="img" aria-label="睡眠時間の推移"></svg>
+      </div>
+    </section>
+
+    <!-- ===== 設定 ===== -->
+    <section class="view" data-view="settings" hidden>
+      <div class="card">
+        <h2 class="section-title">バックアップ</h2>
+        <p class="section-note">記録はこの端末の中だけに保存されています。機種変更やアプリの削除に備えて、ときどき書き出しておくと安心です。</p>
+        <p class="section-note">書き出したファイルは「ファイル」アプリに保存してください。LINE やメールで送ると、ほかの人に中身を見られるおそれがあります。</p>
+        <p class="backup-info" id="backup-info"></p>
+        <div class="settings-actions">
+          <button type="button" class="save-btn" id="export-btn">書き出す</button>
+          <button type="button" class="sub-btn" id="import-btn">ファイルから読み込む</button>
+        </div>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+        <p class="status settings-status" id="settings-status" role="status"></p>
+      </div>
+
+      <!-- ファイルを読み込んだあとだけ出す -->
+      <div class="card" id="undo-import-card" hidden>
+        <h2 class="section-title">読み込む前の記録</h2>
+        <p class="section-note">ファイルを読み込む前の記録（<span id="undo-import-info"></span>）を取ってあります。読み込みを取り消したいときは「元に戻す」を押してください。</p>
+        <div class="settings-actions">
+          <button type="button" class="sub-btn" id="undo-import">元に戻す</button>
+          <button type="button" class="delete-btn" id="undo-import-delete">削除する</button>
+        </div>
+      </div>
+
+      <!-- 保存データが壊れていたとき・保存を止めているときだけ出す -->
+      <div class="card" id="broken-card" hidden>
+        <h2 class="section-title">取り分けたデータ</h2>
+        <p class="section-note" id="broken-note"></p>
+        <div class="settings-actions">
+          <button type="button" class="sub-btn" id="broken-export">書き出す</button>
+          <button type="button" class="delete-btn" id="broken-delete">削除する</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">すべてのデータを削除</h2>
+        <p class="section-note">記録・取り分けたデータ・書きかけを、この端末からすべて消します。元には戻せないので、先に書き出しておくと安心です。</p>
+        <div class="settings-actions">
+          <button type="button" class="delete-btn" id="delete-all">すべて削除する</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- お知らせ（トースト）の枠。読み上げのため常に置いておき、JS で中身だけ入れ替える -->
+  <div class="toast-region" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- タブのアイコンは4つとも同じ線の太さの SVG にそろえる（一貫性）。色は CSS の currentColor で付く -->
+  <nav class="tabs" id="tabs" aria-label="画面の切り替え">
+    <button type="button" class="tab" data-view="record">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path class="ico-line" d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/>
+          <path class="ico-line" d="M13.5 6.5l4 4"/>
+        </svg>
+      </span>記録
+    </button>
+    <button type="button" class="tab" data-view="calendar">
+      <!-- 絵文字の 📅 は日付が「7月17日」で固定なので、12月23日の日めくりを SVG で描く -->
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <rect class="ico-line" x="3" y="4" width="18" height="17" rx="3"/>
+          <path class="ico-fill" d="M6 3h12a4 4 0 0 1 4 4v3H2V7a4 4 0 0 1 4-4z"/>
+          <text class="ico-knock" x="12" y="8.6" text-anchor="middle" font-size="5" font-weight="700">12月</text>
+          <text class="ico-fill" x="12" y="18.8" text-anchor="middle" font-size="8.5" font-weight="700">23</text>
+        </svg>
+      </span>カレンダー
+    </button>
+    <button type="button" class="tab" data-view="graph">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path class="ico-line" d="M4 4v16h16"/>
+          <path class="ico-line" d="M7.5 15l3.5-4 3 2.5 5-6"/>
+        </svg>
+      </span>グラフ
+    </button>
+    <button type="button" class="tab" data-view="settings">
+      <span class="tab-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <circle class="ico-line" cx="12" cy="12" r="3"/>
+          <path class="ico-line" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+        </svg>
+      </span>設定
+    </button>
+  </nav>
+
+  <!-- 睡眠1件ぶんの行の雛形。画面には表示されず、JS で複製して使う -->
+  <template id="sleep-row-template">
+    <li class="sleep-row">
+      <input type="time" class="sleep-start" aria-label="寝た時刻">
+      <span class="sleep-sep" aria-hidden="true">〜</span>
+      <input type="time" class="sleep-end" aria-label="起きた時刻">
+      <button type="button" class="remove-sleep-btn" aria-label="この睡眠を取り消す">✕</button>
+      <span class="sleep-hours"></span>
+    </li>
+  </template>
+
+  <!-- 読み込み順が大事：common（共通部品）→ toast（お知らせ）→ 各画面 → main（起動） -->
+  <script src="js/common.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/record.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/graph.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
