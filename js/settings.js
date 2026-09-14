@@ -1,6 +1,15 @@
-// ===== 設定画面：バックアップ（書き出し・読み込み・元に戻す）、取り分けたデータ、すべて削除 =====
+// ===== 設定画面：タブ（バックアップ／データの削除／このアプリ）=====
+// バックアップ（書き出し・読み込み・元に戻す）、取り分けたデータ、すべて削除、アプリの紹介。
 // 保存まわりは storage.js の関数を使う（ここでは localStorage に直接触らない）
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 読み込めるファイルの大きさの上限（5MB）
+// 紹介で送るのは、公開中のアプリの URL だけ（開いている画面の URL ではなく、決まった URL を送る）
+const APP_URL = 'https://mikage33314.github.io/kimochi-diary/';
+const APP_NAME = 'Dear me+';
+const SHARE_TEXT = `気分・体調・睡眠を1分で記録できる日記アプリ『${APP_NAME}』`;
+const settingsTabsEl = document.getElementById('settings-tabs');
+const dataTabDot = document.getElementById('data-tab-dot');
+const shareBtn = document.getElementById('share-btn');
+const shareStatusEl = document.getElementById('share-status');
 const exportBtn = document.getElementById('export-btn');
 const importBtn = document.getElementById('import-btn');
 const importFileInput = document.getElementById('import-file');
@@ -60,7 +69,20 @@ function renderSettings() {
   brokenCard.hidden = broken.length === 0 && !storageLocked;
   brokenDeleteBtn.hidden = broken.length === 0;
   brokenNoteEl.textContent = brokenNoteText(broken.length);
+  dataTabDot.hidden = brokenCard.hidden; // 別のタブを見ていても気づけるように、「データの削除」に点を付ける
+  shareStatusEl.textContent = '';
 }
+
+// 設定のタブを切り替える。どのタブを見ていたかは、アプリを開いている間だけ覚えておく
+function showSettingsTab(name) {
+  for (const btn of settingsTabsEl.children) btn.setAttribute('aria-pressed', btn.dataset.tab === name);
+  for (const panel of document.querySelectorAll('.settings-panel')) panel.hidden = panel.dataset.panel !== name;
+}
+
+settingsTabsEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-tab]');
+  if (btn) showSettingsTab(btn.dataset.tab);
+});
 
 // ファイルを端末に渡す。iPhone は共有シート（「"ファイル"に保存」を選べる）、使えなければダウンロード。
 // 結果は 'shared'（共有した）/ 'downloaded'（ダウンロードした）/ 'cancelled'（共有シートを閉じた）
@@ -182,6 +204,26 @@ brokenDeleteBtn.addEventListener('click', () => {
   showToast({ text: wasLocked && !storageLocked ? '空きができたので、保存を再開しました' : '削除しました' });
 });
 
+// アプリを紹介する：共有シート（LINE・メッセージなど）で URL と紹介文を送る。
+// 共有シートが無い・使えないときは、紹介文と URL をコピーする。それもできなければ、手でコピーしてもらう
+shareBtn.addEventListener('click', async () => {
+  shareStatusEl.textContent = '';
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: APP_NAME, text: SHARE_TEXT, url: APP_URL });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // 共有シートを閉じただけ
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${SHARE_TEXT}\n${APP_URL}`);
+    showToast({ icon: '🔗', text: '紹介文とリンクをコピーしました' });
+  } catch {
+    shareStatusEl.textContent = 'コピーできませんでした。上のリンクを長押し（PC では選んで右クリック）してコピーしてください';
+  }
+});
+
 // 二重に確かめてから、このアプリのデータをすべて消す
 deleteAllBtn.addEventListener('click', () => {
   const count = Object.keys(loadRecords()).length;
@@ -194,3 +236,5 @@ deleteAllBtn.addEventListener('click', () => {
   if (left) settingsStatusEl.textContent = `一部のデータを削除できませんでした（${left}件）`;
   else showToast({ text: 'すべてのデータを削除しました' });
 });
+
+document.getElementById('share-url').textContent = APP_URL;

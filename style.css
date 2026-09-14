@@ -1,5 +1,5 @@
 /* ===== デザインの約束ごと（トークン） =====
-   PayPay アプリのスタイルガイドを参考にした4原則「共感・一貫性・シンプル・ハッピー」に沿う。
+   4原則「共感・一貫性・シンプル・ハッピー」に沿う。
    色味は、淡いクリームピンクの地 × サーモンピーチのボタン。文字は黒。
    - シンプル：強調色はサーモン1色だけ。塗り・枠・アイコンに使い、文字には使わない（文字は常に黒で読みやすく）
    - 一貫性：色・角丸・影・動きはここで決めた値だけを使う（ダークモードは値を差し替えるだけ）
@@ -24,6 +24,7 @@
   --focus: #b8653f;       /* フォーカス・選択中の枠（サーモンを濃くして、どの地の上でも見えるように） */
   --sun: #b3261e;
   --sat: #1f5fbf;
+  --attention: #b3261e;   /* 確かめてほしい所の印（設定のタブの点） */
   --botanical: rgba(170, 120, 95, .3); /* 背景の花の影の色（濃さもここで調整） */
 
   /* 気分ごとの色（1=つらい 〜 5=最高）。カレンダー・凡例・詳細で共通 */
@@ -68,6 +69,7 @@
     --focus: #f2b89c;
     --sun: #ffa39b;
     --sat: #a9c4ec;
+    --attention: #ffa39b;
     --botanical: rgba(255, 228, 214, .07);
     --mood-1: #3a3a4e;
     --mood-2: #33424c;
@@ -92,6 +94,19 @@ html { scroll-padding-bottom: calc(var(--tabbar-h) + 110px + env(safe-area-inset
 
 /* 途中で改行させない（「まだありま／せん」のように切れないように） */
 .nowrap { white-space: nowrap; }
+
+/* 画面には出さず、読み上げだけで伝える文字 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 body {
   margin: 0;
@@ -143,12 +158,13 @@ main {
   padding: 20px 16px;
 }
 
-/* 気分の値 → 背景色（data-mood を持つ要素ならどこでも効く） */
-[data-mood="1"] { background: var(--mood-1); }
-[data-mood="2"] { background: var(--mood-2); }
-[data-mood="3"] { background: var(--mood-3); }
-[data-mood="4"] { background: var(--mood-4); }
-[data-mood="5"] { background: var(--mood-5); }
+/* 1〜5 の段階 → 背景色。気分のチップは data-mood、カレンダーのマスと凡例は data-level
+   （カレンダーは気分・体調を切り替えられる。どちらも同じ5段階の色＝同じ色は同じ段階） */
+[data-mood="1"], [data-level="1"] { background: var(--mood-1); }
+[data-mood="2"], [data-level="2"] { background: var(--mood-2); }
+[data-mood="3"], [data-level="3"] { background: var(--mood-3); }
+[data-mood="4"], [data-level="4"] { background: var(--mood-4); }
+[data-mood="5"], [data-level="5"] { background: var(--mood-5); }
 
 button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -552,7 +568,7 @@ input::-webkit-date-and-time-value { text-align: left; }
   border-radius: var(--r-s);
   transition: box-shadow .15s;
 }
-button.cal-cell:not([data-mood]) { background: none; }
+button.cal-cell:not([data-level]) { background: none; }
 
 .cal-day {
   min-width: 1.5em;
@@ -571,7 +587,7 @@ button.cal-cell:not([data-mood]) { background: none; }
 .cal-cell:disabled { opacity: .3; cursor: default; }
 
 /* 凡例は記録画面の5段階ボタンと同じ「顔の下に文字」の5列にそろえる（折り返して1つだけ余らないように） */
-.mood-legend {
+.cal-legend {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
@@ -630,6 +646,27 @@ button.cal-cell:not([data-mood]) { background: none; }
   transition: background .15s, color .15s;
 }
 .segmented [aria-pressed="true"] { color: var(--on-accent); font-weight: 700; background: var(--accent); box-shadow: var(--shadow-accent); }
+.segmented button { position: relative; padding: 0 4px; line-height: 1.3; }
+/* 320px の画面では、設定のタブの「バックアップ」「データの削除」（6文字）が途中で改行しないよう、少し小さくする */
+@media (max-width: 359px) {
+  .segmented button { font-size: .8125rem; }
+}
+
+/* 設定のタブ：「データの削除」に確かめてほしいデータがあるときの点（文字に重ならないよう右上の角に置く） */
+.tab-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: var(--attention);
+  border-radius: 50%;
+}
+
+/* 睡眠・就寝時刻の「平均｜中央値」。カードの下に右寄せで、控えめに置く */
+.stat-kind { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.stat-kind-label { font-size: .8125rem; color: var(--text-sub); } /* 地の上なので --text-sub（4.5:1） */
+.stat-kind .segmented { flex: 0 0 176px; }
 
 /* 地の上に直接置く文字は、花の影の濃い所に重なっても 4.5:1 を保てる濃さ（--text-sub）にする */
 .stats-note { margin-bottom: 0; text-align: center; font-size: .8125rem; color: var(--text-sub); }
@@ -735,6 +772,24 @@ button.cal-cell:not([data-mood]) { background: none; }
 .backup-info { margin: 0 0 16px; font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .settings-actions { display: grid; gap: 12px; }
 .settings-actions .delete-btn { margin-top: 0; }
+.settings-panel > * + * { margin-top: 12px; }
+
+/* 紹介するアプリの URL。タップ1回で全体を選べるようにし、長い URL は枠の中で折り返す */
+.share-url {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+  background: var(--fill);
+  border-radius: var(--r-s);
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+/* ホーム画面での使い方（端末ごとの手順） */
+.usage-list { margin: 0 0 12px; padding-left: 1.2em; font-size: .875rem; color: var(--text-sub); }
+.usage-list li + li { margin-top: 4px; }
+.usage-list b { color: var(--text); }
 
 /* 端末で「視差効果を減らす」を選んでいる人には、弾む動きを止める */
 @media (prefers-reduced-motion: reduce) {

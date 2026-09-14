@@ -4,6 +4,8 @@ const calTitleEl = document.getElementById('cal-title');
 const calSummaryEl = document.getElementById('cal-summary');
 const calPrevBtn = document.getElementById('cal-prev');
 const calNextBtn = document.getElementById('cal-next');
+const calKindEl = document.getElementById('cal-kind');
+const calLegendEl = document.getElementById('cal-legend');
 const dayDetailEl = document.getElementById('day-detail');
 
 // 表示中の年・月（月は 0〜11）と、選択中の日
@@ -11,8 +13,16 @@ let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let selectedKey = toDateKey(new Date());
 
+// マスに出すのは気分か体調か。選んだ方は storage.js で覚えておき、次に開いたときも同じにする
+const CAL_KINDS = {
+  mood: { field: 'mood', name: '気分', options: MOODS },
+  condition: { field: 'condition', name: '体調', options: CONDITIONS },
+};
+let calKind = loadCalendarKind();
+
 function renderCalendar() {
   const records = loadRecords();
+  const kind = CAL_KINDS[calKind];
   const todayKey = toDateKey(new Date());
   const firstWeekday = new Date(calYear, calMonth, 1).getDay(); // 1日が何曜日か（0=日）
   const lastDate = new Date(calYear, calMonth + 1, 0).getDate(); // 「翌月の0日」＝今月の末日
@@ -21,13 +31,14 @@ function renderCalendar() {
 
   // 1日の曜日の位置まで空白マスで埋める
   let html = '<div class="cal-cell is-blank"></div>'.repeat(firstWeekday);
-  const moods = [];
+  const levels = [];
 
   for (let d = 1; d <= lastDate; d++) {
     const key = toDateKey(new Date(calYear, calMonth, d));
     const r = records[key];
-    const mood = r && MOODS[r.mood - 1];
-    if (r) moods.push(r.mood);
+    const level = r?.[kind.field]; // 気分か体調の段階（1〜5）
+    const option = r && kind.options[level - 1];
+    if (r) levels.push(level);
 
     const weekday = (firstWeekday + d - 1) % 7;
     const isToday = key === todayKey;
@@ -37,26 +48,36 @@ function renderCalendar() {
     if (isToday) classes.push('is-today');
     if (key === selectedKey) classes.push('is-selected');
 
-    // mood は loadRecords() で 1〜5 の整数に直してあるので、そのまま属性に入れても安全。
+    // 段階は loadRecords() で 1〜5 の整数に直してあるので、そのまま属性に入れても安全。
+    // 色は data-level で付ける（気分・体調で同じ5段階の色）。
     // 未来の日は押せなくする。選択中（aria-pressed）と今日（aria-current）は読み上げでも伝える
     html += `
       <button type="button" class="${classes.join(' ')}" data-date="${key}"
-        ${r ? `data-mood="${r.mood}"` : ''} ${key > todayKey ? 'disabled' : ''}
+        ${r ? `data-level="${level}"` : ''} ${key > todayKey ? 'disabled' : ''}
         aria-pressed="${key === selectedKey}" ${isToday ? 'aria-current="date"' : ''}
-        aria-label="${calMonth + 1}月${d}日${mood ? '、' + mood.label : ''}">
+        aria-label="${calMonth + 1}月${d}日${option ? `、${kind.name}：${option.label}` : ''}">
         <span class="cal-day">${d}</span>
-        <span class="cal-icon">${mood ? mood.icon : ''}</span>
+        <span class="cal-icon">${option ? option.icon : ''}</span>
       </button>`;
   }
   calendarEl.innerHTML = html;
 
-  const avg = average(moods);
-  calSummaryEl.textContent = moods.length
-    ? `記録 ${moods.length}日 ・ 平均の気分 ${MOODS[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`
+  const avg = average(levels);
+  calSummaryEl.textContent = levels.length
+    ? `記録 ${levels.length}日 ・ 平均の${kind.name} ${kind.options[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`
     : 'この月の記録はまだありません';
 
   calNextBtn.disabled = isCurrentOrFutureMonth(calYear, calMonth); // 今月より先へは進めない
   calPrevBtn.disabled = calYear * 12 + calMonth <= MIN_YEAR * 12;  // 2000年1月より前へは戻れない
+  renderCalendarKind();
+}
+
+// 「気分｜体調」の選択状態と、色の凡例（段階ごとの背景色）
+function renderCalendarKind() {
+  for (const btn of calKindEl.children) btn.setAttribute('aria-pressed', btn.dataset.kind === calKind);
+  calLegendEl.innerHTML = CAL_KINDS[calKind].options
+    .map((o) => `<span class="legend-item"><span class="legend-swatch" data-level="${o.value}">${o.icon}</span>${o.label}</span>`)
+    .join('');
 }
 
 function isInShownMonth(key) {
@@ -128,6 +149,14 @@ function calendarToToday() {
 calPrevBtn.addEventListener('click', () => moveMonth(-1));
 calNextBtn.addEventListener('click', () => moveMonth(1));
 
+calKindEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-kind]');
+  if (!btn || btn.dataset.kind === calKind) return;
+  calKind = btn.dataset.kind;
+  saveCalendarKind(calKind);
+  renderCalendar();
+});
+
 // マスは描き直すたびに作り直すので、リスナーは親の calendarEl に1つだけ付ける（イベント委譲）
 calendarEl.addEventListener('click', (e) => {
   const cell = e.target.closest('[data-date]');
@@ -145,7 +174,4 @@ dayDetailEl.addEventListener('click', (e) => {
   focusRecordView(); // 押したボタンは隠れた画面にあるので、フォーカスを記録画面へ移す
 });
 
-// 色の凡例（気分ごとの背景色）
-document.getElementById('mood-legend').innerHTML = MOODS
-  .map((m) => `<span class="legend-item"><span class="legend-swatch" data-mood="${m.value}">${m.icon}</span>${m.label}</span>`)
-  .join('');
+renderCalendarKind();

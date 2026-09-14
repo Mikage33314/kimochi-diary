@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>きもち日記</title>
+  <title>Dear me+</title>
   <meta name="description" content="毎日の気分・体調・睡眠を1分で記録する日記。記録はこの端末の中だけに保存します">
   <!-- PWA：ホーム画面に追加したときの名前・アイコン・色 -->
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="apple-mobile-web-app-title" content="きもち日記">
+  <meta name="apple-mobile-web-app-title" content="Dear me+">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <meta name="theme-color" content="#fdf6f1" media="(prefers-color-scheme: light)">
@@ -16,7 +16,7 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>きもち日記</h1>
+    <h1>Dear me+</h1>
   </header>
 
   <main>
@@ -95,6 +95,10 @@
 
     <!-- ===== カレンダー ===== -->
     <section class="view" data-view="calendar" hidden>
+      <div class="segmented" id="cal-kind" role="group" aria-label="カレンダーに表示するもの">
+        <button type="button" data-kind="mood" aria-pressed="true">気分</button>
+        <button type="button" data-kind="condition" aria-pressed="false">体調</button>
+      </div>
       <div class="card">
         <div class="month-nav">
           <button type="button" class="icon-btn" id="cal-prev" aria-label="前の月">‹</button>
@@ -106,7 +110,7 @@
           <span class="is-sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="is-sat">土</span>
         </div>
         <div class="calendar" id="calendar"></div>
-        <div class="mood-legend" id="mood-legend"></div>
+        <div class="cal-legend" id="cal-legend"></div>
       </div>
       <div class="card" id="day-detail"></div>
     </section>
@@ -125,6 +129,14 @@
       </div>
       <p class="stats-note" id="stats-note"></p>
       <div class="stats" id="stats"></div>
+      <!-- 睡眠と就寝時刻のカード（下の段の2枚）だけを、平均と中央値で切り替える -->
+      <div class="stat-kind">
+        <span class="stat-kind-label" id="stat-kind-label">睡眠・就寝時刻</span>
+        <div class="segmented" id="stat-kind" role="group" aria-labelledby="stat-kind-label">
+          <button type="button" data-kind="mean" aria-pressed="true">平均</button>
+          <button type="button" data-kind="median" aria-pressed="false">中央値</button>
+        </div>
+      </div>
 
       <div class="card">
         <div class="chart-head">
@@ -164,11 +176,19 @@
 
     <!-- ===== 設定 ===== -->
     <section class="view" data-view="settings" hidden>
+      <div class="segmented" id="settings-tabs" role="group" aria-label="設定の切り替え">
+        <button type="button" data-tab="backup" aria-pressed="true">バックアップ</button>
+        <!-- 取り分けたデータがある・保存を止めているときだけ、右上に点を出す -->
+        <button type="button" data-tab="data" aria-pressed="false">データの削除<span class="tab-dot" id="data-tab-dot" hidden><span class="sr-only">（確認が必要なデータがあります）</span></span></button>
+        <button type="button" data-tab="app" aria-pressed="false">このアプリ</button>
+      </div>
+
+      <!-- ----- バックアップ ----- -->
+      <div class="settings-panel" data-panel="backup">
       <div class="card">
         <h2 class="section-title">バックアップ</h2>
         <p class="section-note">記録はこの端末の中だけに保存されています。機種変更やアプリの削除に備えて、ときどき書き出しておくと安心です。</p>
         <p class="section-note">書き出したファイルは「ファイル」アプリに保存してください。LINE やメールで送ると、ほかの人に中身を見られるおそれがあります。</p>
-        <p class="section-note">ホーム画面のアイコンを削除すると、記録も消えます。アプリの更新は自動で届くので、追加し直す必要はありません。</p>
         <p class="backup-info" id="backup-info"></p>
         <div class="settings-actions">
           <button type="button" class="save-btn" id="export-btn">書き出す</button>
@@ -187,7 +207,10 @@
           <button type="button" class="delete-btn" id="undo-import-delete">削除する</button>
         </div>
       </div>
+      </div>
 
+      <!-- ----- データの削除 ----- -->
+      <div class="settings-panel" data-panel="data" hidden>
       <!-- 保存データが壊れていたとき・保存を止めているときだけ出す -->
       <div class="card" id="broken-card" hidden>
         <h2 class="section-title">取り分けたデータ</h2>
@@ -204,6 +227,31 @@
         <div class="settings-actions">
           <button type="button" class="delete-btn" id="delete-all">すべて削除する</button>
         </div>
+      </div>
+      </div>
+
+      <!-- ----- このアプリ ----- -->
+      <div class="settings-panel" data-panel="app" hidden>
+      <div class="card">
+        <h2 class="section-title">アプリを紹介する</h2>
+        <p class="section-note">LINE やメッセージで、このアプリのリンクを送れます。紹介しても、あなたの記録は相手に見えません（記録はこの端末の中だけにあります）。</p>
+        <p class="share-url" id="share-url"></p>
+        <div class="settings-actions">
+          <button type="button" class="save-btn" id="share-btn">アプリを紹介する</button>
+        </div>
+        <p class="status settings-status" id="share-status" role="status"></p>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">ホーム画面での使い方</h2>
+        <ul class="usage-list">
+          <li><b>iPhone・iPad</b>：Safari の共有ボタン（<span class="nowrap">□に↑</span>）→「ホーム画面に追加」</li>
+          <li><b>PC</b>：Chrome・Edge のアドレスバーの右にある「インストール」</li>
+          <li><b>Android</b>：Chrome のメニュー（︙）→「ホーム画面に追加」</li>
+        </ul>
+        <p class="section-note">アプリの更新は自動で届くので、追加し直す必要はありません。</p>
+        <p class="section-note">ホーム画面のアイコンを削除すると、記録も消えます。先にバックアップしておくと安心です。</p>
+      </div>
       </div>
     </section>
   </main>

@@ -17,6 +17,7 @@ const BEFORE_UPGRADE_KEY_PREFIX = KEY_PREFIX + 'before-upgrade-v'; // 形式を�
 const BEFORE_IMPORT_KEY = KEY_PREFIX + 'before-import';            // ファイルを読み込む前の記録（元に戻す用）
 const DRAFT_KEY = KEY_PREFIX + 'draft';                            // 記録画面の書きかけ
 const LAST_BACKUP_KEY = KEY_PREFIX + 'last-backup';                // 最後に書き出した日時（ISO 形式）
+const CALENDAR_KIND_KEY = KEY_PREFIX + 'calendar-view';            // カレンダーに表示するもの（'mood' か 'condition'）
 
 // ----- 形式の版 -----
 // DATA_VERSION：記録の形式の版。書き出すファイルの版（version）も同じ値を使う。
@@ -157,8 +158,8 @@ let recordsCache = null;     // { raw, version, records }：直近に検査し�
 
 const LOCK_NOTICES = {
   newer: '新しい版のアプリで保存した記録があります。上書きしないよう保存を止めています。アプリを上にスワイプして閉じてから、開き直してください（アイコンは削除しないでください）',
-  broken: '保存データを読み込めません。上書きしないよう保存を止めています（設定画面）',
-  rewrite: '保存データの一部が読めず、直して保存し直す空きがないため、保存を止めています（設定画面）',
+  broken: '保存データを読み込めません。上書きしないよう保存を止めています（設定の「データの削除」）',
+  rewrite: '保存データの一部が読めず、直して保存し直す空きがないため、保存を止めています（設定の「データの削除」）',
 };
 
 function lockStorage(reason) {
@@ -234,7 +235,7 @@ function readRecords(raw) {
     return records;
   }
   unlockStorage();
-  storageNotice = `${brokenReason(result)}ため、元のデータを取り分けました（設定画面）`;
+  storageNotice = `${brokenReason(result)}ため、元のデータを取り分けました（設定の「データの削除」）`;
   return cacheRecords(fixed, records);
 }
 
@@ -294,7 +295,7 @@ function saveRecords(records) {
 // 保存に失敗したときに画面に出す文
 function saveErrorMessage() {
   if (storageLockReason === 'newer') return LOCK_NOTICES.newer;
-  if (storageLocked) return '保存データを読み込めないため、上書きしないよう保存を止めています（設定画面）';
+  if (storageLocked) return '保存データを読み込めないため、上書きしないよう保存を止めています（設定の「データの削除」）';
   return '保存できませんでした。端末の保存領域がいっぱいの可能性があります';
 }
 
@@ -359,6 +360,16 @@ function loadDraft() {
   };
 }
 
+// ----- 表示の設定 -----
+// カレンダーに表示するもの。無い・読めなければ気分（'mood'）
+function loadCalendarKind() {
+  return readItem(CALENDAR_KIND_KEY) === 'condition' ? 'condition' : 'mood';
+}
+
+function saveCalendarKind(kind) {
+  writeItem(CALENDAR_KIND_KEY, kind); // 覚えられなくても、表示の切り替えはできる
+}
+
 // ----- バックアップ -----
 function makeBackup(records) {
   return { app: 'kimochi-diary', version: DATA_VERSION, exportedAt: new Date().toISOString(), records };
@@ -403,7 +414,7 @@ function parseBackupText(text) {
   // 中身は、起動時の読み込みと同じ normalizeRecords() で検査する。今日より後の日付は除く
   const result = normalizeRecords(source, { maxKey: toDateKey(new Date()) });
   const count = result ? Object.keys(result.records).length : 0;
-  if (count === 0) return { error: 'きもち日記の記録が見つかりませんでした' };
+  if (count === 0) return { error: 'このアプリの記録が見つかりませんでした' };
   return { ...result, count };
 }
 

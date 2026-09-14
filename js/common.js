@@ -160,6 +160,16 @@ function averageBedtime(times) {
   return fromMinutes(Math.round((angle / (2 * Math.PI)) * 1440) % 1440);
 }
 
+// 就寝時刻の中央値。そのまま並べると 23:30 と 0:30 が両端に離れてしまうので、
+// 平均の時刻を中心に「前後12時間」の数直線に直してから真ん中を取る（23:30 と 0:30 の真ん中は 0:00）。
+// 平均の向きが決まらないとき（真逆の時刻どうし）は 0:00 を中心にする
+function medianBedtime(times) {
+  if (times.length === 0) return null;
+  const center = toMinutes(averageBedtime(times) ?? '00:00');
+  const offsets = times.map((t) => ((toMinutes(t) - center + 2160) % 1440) - 720); // 中心から何分ずれているか（-720〜719）
+  return fromMinutes((Math.round(center + median(offsets)) % 1440 + 1440) % 1440);
+}
+
 // 時間（小数）→ "7時間20分"。分は四捨五入する。ちょうどなら "7時間"、1時間未満なら "40分"
 function formatHours(h) {
   const total = Math.round(h * 60);
@@ -180,6 +190,14 @@ function truncateText(str, max) {
 // 数値の平均。空なら null
 function average(nums) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+}
+
+// 数値の中央値（小さい順に並べたときの真ん中。数が偶数なら、真ん中の2つの平均）。空なら null
+function median(nums) {
+  if (nums.length === 0) return null;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 // 利用者が入力した文字を innerHTML に入れる前に無害化する（< や & を「文字」として表示させる）

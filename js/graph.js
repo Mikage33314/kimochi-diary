@@ -14,9 +14,12 @@ const graphMonthNavEl = document.getElementById('graph-month-nav');
 const graphTitleEl = document.getElementById('graph-title');
 const graphPrevBtn = document.getElementById('graph-prev');
 const graphNextBtn = document.getElementById('graph-next');
+const statKindEl = document.getElementById('stat-kind');
 
 // 表示期間：'week' は今日までの直近7日、'month' は1か月（その月の日数ぶん）、'year' は1年（12か月）
 let graphMode = 'week';
+// 睡眠・就寝時刻のカードの出し方：'mean'（平均）か 'median'（中央値＝並べたときの真ん中。極端な日に引っぱられにくい）
+let statKind = 'mean';
 let graphYear = new Date().getFullYear();
 let graphMonth = new Date().getMonth(); // 0〜11
 // 年ごとの表示で、記録がこれより少ない月は「参考程度に」として目立たせない
@@ -142,13 +145,15 @@ function seriesPaths(values, weak, xFn, yFn) {
   return { solid: solid.trim(), dotted: dotted.trim() };
 }
 
-// 下の目盛りの文字（null の所は描かない）
-// - 7日：「9/13」を毎日
-// - 月ごと：日にちだけを 1日・5の倍数・末日 に付ける（末日のすぐ手前の5の倍数＝31日の月の30日 は重なるので省く）
-// - 年ごと：「1月」「2」「3」…「12」。「月」を全部に付けると隣と重なるので、最初だけに付ける
+// 下の目盛りの文字（null の所は描かない）。数字だけを並べ、単位は左下に1つだけ出す（X_UNITS）。
+// 全部に単位を付けると隣と重なり、一部だけに付けると一貫しないため
+// - 7日：「9/13」を毎日（単位なし）
+// - 月ごと：日にちを 1日・5の倍数・末日 に付ける（末日のすぐ手前の5の倍数＝31日の月の30日 は重なるので省く）
+// - 年ごと：1〜12 の月
+const X_UNITS = { month: '日', year: '月' };
 function xLabels(points) {
   const n = points.length;
-  if (graphMode === 'year') return points.map((p) => (p.month === 0 ? '1月' : String(p.month + 1)));
+  if (graphMode === 'year') return points.map((p) => String(p.month + 1));
   return points.map(({ key }) => {
     const d = fromDateKey(key);
     const day = d.getDate();
@@ -162,6 +167,9 @@ function drawXLabels(svg, points, height) {
   xLabels(points).forEach((label, i) => {
     if (label != null) svgEl('text', { x: xAt(i, n), y: height - 6, 'text-anchor': 'middle', class: 'axis-label' }, svg, label);
   });
+  // 単位は、縦軸の文字の列の一番下（横軸の文字と同じ高さ）に置く
+  const unit = X_UNITS[graphMode];
+  if (unit) svgEl('text', { x: PAD.left - 8, y: height - 6, 'text-anchor': 'end', class: 'axis-label axis-unit' }, svg, unit);
 }
 
 function drawEmpty(svg, height) {
@@ -284,8 +292,13 @@ function renderStats(days) {
 
   const moodAvg = average(recs.map((r) => r.mood));
   const condAvg = average(recs.map((r) => r.condition));
-  const sleepAvg = average(withSleep.map((r) => totalSleepHours(r)));
-  const bedtime = averageBedtime(withSleep.map((r) => mainSleep(r).start));
+  // 睡眠・就寝時刻は、平均か中央値（statKind）で出す。気分・体調は1〜5の段階なので平均だけ
+  const isMedian = statKind === 'median';
+  const statName = isMedian ? '中央値' : '平均';
+  const sleepList = withSleep.map((r) => totalSleepHours(r));
+  const bedtimes = withSleep.map((r) => mainSleep(r).start);
+  const sleepStat = isMedian ? median(sleepList) : average(sleepList);
+  const bedtime = isMedian ? medianBedtime(bedtimes) : averageBedtime(bedtimes);
 
   // 平均値を四捨五入して、近い顔アイコンを添える
   const score = (avg, list) => (avg == null ? '—' : `${list[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`);
@@ -302,15 +315,15 @@ function renderStats(days) {
   statsEl.innerHTML =
     card('気分の平均', score(moodAvg, MOODS)) +
     card('体調の平均', score(condAvg, CONDITIONS)) +
-    card('睡眠の平均', sleepAvg == null ? '—' : formatHours(sleepAvg)) +
-    card('平均の就寝時刻', bedtime ?? '—');
+    card(`睡眠の${statName}`, sleepStat == null ? '—' : formatHours(sleepStat)) +
+    card(isMedian ? '就寝時刻の中央値' : '平均の就寝時刻', bedtime ?? '—');
 
   // 読み上げ用に、グラフの内容を文章でも持たせる（絵としてのグラフの代わり）
   const avgText = (avg) => (avg == null ? 'なし' : avg.toFixed(1));
   moodChartEl.setAttribute('aria-label',
     `気分と体調の推移（${period}、記録${recs.length}日）。気分の平均${avgText(moodAvg)}、体調の平均${avgText(condAvg)}`);
   sleepChartEl.setAttribute('aria-label',
-    `睡眠時間の推移（${period}）。平均${sleepAvg == null ? 'なし' : formatHours(sleepAvg)}`);
+    `睡眠時間の推移（${period}）。${statName}${sleepStat == null ? 'なし' : formatHours(sleepStat)}`);
 }
 
 // 年ごとの表示の読み上げ用：気分の月平均が一番低い月・高い月。
@@ -398,6 +411,14 @@ periodEl.addEventListener('click', (e) => {
   if (!btn) return;
   graphMode = btn.dataset.mode;
   for (const b of periodEl.children) b.setAttribute('aria-pressed', b === btn);
+  renderGraph();
+});
+
+statKindEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-kind]');
+  if (!btn) return;
+  statKind = btn.dataset.kind;
+  for (const b of statKindEl.children) b.setAttribute('aria-pressed', b === btn);
   renderGraph();
 });
 
