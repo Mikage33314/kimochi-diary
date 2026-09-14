@@ -26,9 +26,21 @@ function showView(name, { scrollTop = true } = {}) {
   if (scrollTop) window.scrollTo(0, 0);
 }
 
+// 日付が変わっていたら、記録画面の日付と、カレンダー・グラフを今日を含む月・期間に合わせる。
+// アプリに戻ったときに加えて、下のタブを押したときにも確かめる（PC などで開いたまま日をまたいだとき）
+function checkDayChange() {
+  if (!refreshToday()) return;
+  calendarToToday();
+  graphToToday();
+}
+
 tabsEl.addEventListener('click', (e) => {
   const tab = e.target.closest('.tab');
-  if (tab) showView(tab.dataset.view);
+  if (!tab) return;
+  checkDayChange();
+  // 設定を開いているときに「設定」をもう一度押したら、項目の一覧へ戻る
+  if (tab.dataset.view === 'settings' && currentView === 'settings') showSettingsPage(null);
+  showView(tab.dataset.view);
 });
 
 // ----- 更新（Service Worker：sw.js） -----
@@ -95,11 +107,7 @@ guideCloseBtn.addEventListener('click', () => {
 function onResume() {
   if (reloadIfUpdated()) return;
   swRegistration?.update().catch(() => {}); // 新しい版が出ていないか確かめる（オフラインなら何もしない）
-  if (refreshToday()) {
-    // 日付が変わっていたら、カレンダーとグラフも今日を含む月・期間に戻す
-    calendarToToday();
-    graphToToday();
-  }
+  checkDayChange();
   if (currentView !== 'record') showView(currentView, { scrollTop: false });
 }
 

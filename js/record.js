@@ -12,6 +12,7 @@ const saveBarEl = recordForm.querySelector('.save-bar');
 const deleteBtn = document.getElementById('delete-btn');
 const sleepList = document.getElementById('sleep-list');
 const sleepTotalEl = document.getElementById('sleep-total');
+const sleepHintEl = document.getElementById('sleep-hint');
 const sleepTemplate = document.getElementById('sleep-row-template');
 const addSleepBtn = document.getElementById('add-sleep');
 const sameSleepBtn = document.getElementById('same-sleep');
@@ -140,6 +141,23 @@ function updateDateInfo(records) {
   nudgeBtn.hidden = !showNudge;
   const y = fromDateKey(yesterday);
   nudgeBtn.querySelector('.nudge-text').textContent = showNudge ? `昨日（${y.getMonth() + 1}/${y.getDate()}）の分もつける？` : '';
+  updateSleepHint(today);
+}
+
+// 睡眠の見出しの下の一文。睡眠は起きた日の記録に入るので、表示中の日の「前の夜〜その日の朝」を示す
+// （夜に記録する人が、これから寝る時間を入れるのか迷わないように）
+function updateSleepHint(today) {
+  const md = (key) => {
+    const d = fromDateKey(key);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const prev = md(shiftDateKey(currentKey, -1));
+  const cur = md(currentKey);
+  const range = currentKey === today ? `ゆうべ（${prev}）〜けさ（${cur}）` : `${prev}の夜〜${cur}の朝`;
+  // 語句ごとにひとかたまりにし、折り返すときは語句の切れ目で改行する（「入／れます」「昼寝／は」のように切れないように）。
+  // 1文目は 320px 幅に1行で収まらないので、「〜けさ（9/14）の」と「睡眠を入れます。」の間で分ける
+  const part = (text) => Object.assign(document.createElement('span'), { className: 'hint-part', textContent: text });
+  sleepHintEl.replaceChildren(part(`${range}の`), part('睡眠を入れます。'), part('昼寝は「＋」で追加できます'));
 }
 
 nudgeBtn.addEventListener('click', () => {
@@ -181,6 +199,8 @@ function fillForm(dateKey) {
   setSleepRows(r?.sleeps ?? []);
   memoInput.value = r?.memo ?? '';
   effortInput.value = r?.effort ?? '';
+  syncGrow(memoInput);
+  syncGrow(effortInput);
   deleteBtn.hidden = !r;
   // 「編集中」は読み上げない枠に出す。保存時のお知らせと二重に読み上げられないように
   editStateEl.textContent = r ? `${formatDateJa(dateKey)}の記録を編集中` : '';
@@ -223,6 +243,8 @@ function restoreDraft(d) {
   setSleepRows(d.sleeps);
   memoInput.value = d.memo;
   effortInput.value = d.effort;
+  syncGrow(memoInput);
+  syncGrow(effortInput);
   markDirty(); // fillForm で消えた退避を書き直す
   recordStatusEl.textContent = '保存していない入力を戻しました';
 }
@@ -291,13 +313,52 @@ recordForm.addEventListener('focusin', (e) => {
   });
 });
 
-// メモ欄で改行キーを押すと、フォームが送信（保存）されてしまうので止める。
+// メモ欄で改行キーを押しても、改行は入れずにキーボードを閉じる（メモは「ひとこと」なので1段落にする）。
 // 日本語の変換を確定する Enter（isComposing）はそのまま通す
 memoInput.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   memoInput.blur(); // キーボードを閉じる
 });
+
+// 念のための備え：上のキーの判定をすり抜けて改行が入りそうなとき（キーボードによっては Enter のキー番号が 229 になる など）も、
+// 改行は入れずにキーボードを閉じる。変換の確定では改行は入らないので、ここには来ない
+memoInput.addEventListener('beforeinput', (e) => {
+  if (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph') return;
+  e.preventDefault();
+  memoInput.blur();
+});
+
+// 文字の量に合わせて伸びる欄（style.css の .grow-wrap）：見えない写しに同じ文字を入れて、欄の高さを決めさせる
+function syncGrow(el) {
+  el.parentElement.dataset.value = el.value;
+}
+
+// 貼り付けなどで入った改行は空白にする。直したら true。
+// 値を入れ直すとカーソルが末尾へ飛ぶので、元の位置に戻す（改行1文字を空白1文字にするので、位置はずれない）
+function replaceMemoLineBreaks() {
+  if (!/[\r\n]/.test(memoInput.value)) return false;
+  const caret = memoInput.selectionStart;
+  memoInput.value = memoInput.value.replace(/\r\n?|\n/g, ' ');
+  if (document.activeElement === memoInput) memoInput.setSelectionRange(caret, caret);
+  return true;
+}
+
+// フォーム全体の input（書きかけの退避）より先に動くので、直した文字が退避される。
+// 日本語の変換中は直さない（値を入れ直すと変換が途切れ、「かき→柿」が「か柿」のように二重になる。
+// 改行入りの記録を読み込んだメモに、変換で書き足したときに起きる）。変換が終わってから直す
+memoInput.addEventListener('input', (e) => {
+  if (!e.isComposing) replaceMemoLineBreaks();
+  syncGrow(memoInput);
+});
+memoInput.addEventListener('compositionend', () => {
+  if (!replaceMemoLineBreaks()) return;
+  // 見えない写しと退避も、直した文字にする（Chrome などは変換の確定の後に input が来ないため、
+  // 写しが改行入りのまま残り、欄が1行ぶん高くなる）
+  syncGrow(memoInput);
+  markDirty();
+});
+effortInput.addEventListener('input', () => syncGrow(effortInput));
 
 // エラーを保存ボタンのすぐ上に出し、直すべき欄へ移動する
 function showFieldError(message, focusEl) {

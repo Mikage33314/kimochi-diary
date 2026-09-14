@@ -59,8 +59,11 @@
           <div class="scale" id="condition-scale"></div>
         </fieldset>
 
-        <fieldset class="field">
+        <!-- aria-describedby：時刻の欄へ直接移ったときも、案内（どの夜〜朝か）が読み上げで伝わるように -->
+        <fieldset class="field" aria-describedby="sleep-hint">
           <legend class="field-label">睡眠</legend>
+          <!-- どの夜〜朝の睡眠を入れるか（睡眠は起きた日の記録に入る）。日付は record.js で入れる -->
+          <p class="sleep-hint" id="sleep-hint"></p>
           <div class="sleep-head" aria-hidden="true">
             <span>寝た時刻</span><span></span><span>起きた時刻</span><span></span>
           </div>
@@ -72,14 +75,16 @@
           </div>
         </fieldset>
 
+        <!-- メモ・頑張ったことは、文字の量に合わせて折り返し、欄の高さも伸びる（style.css の .grow-wrap）。
+             メモは「ひとこと」なので改行は入れない（改行キーではキーボードを閉じる。record.js） -->
         <label class="field">
           <span class="field-label">ひとことメモ</span>
-          <input type="text" id="memo" maxlength="100" enterkeyhint="done" placeholder="今日はどんな日だった？">
+          <span class="grow-wrap"><textarea id="memo" rows="1" maxlength="100" enterkeyhint="done" placeholder="今日はどんな日だった？"></textarea></span>
         </label>
 
         <label class="field">
           <span class="field-label">頑張ったこと</span>
-          <textarea id="effort" rows="2" maxlength="200" placeholder="小さなことでもOK"></textarea>
+          <span class="grow-wrap"><textarea id="effort" rows="2" maxlength="200" placeholder="小さなことでもOK"></textarea></span>
         </label>
 
         <!-- 保存ボタンは画面の下に貼りつき、スクロールしなくても押せる。エラーや「編集中」もここに出す。
@@ -175,18 +180,73 @@
     </section>
 
     <!-- ===== 設定 ===== -->
+    <!-- 項目の一覧（縦に並ぶ行）から、各ページへ移る。項目が増えても行を足すだけで済む。
+         アイコンは下のタブと同じ線の太さの SVG にそろえる -->
     <section class="view" data-view="settings" hidden>
-      <div class="segmented" id="settings-tabs" role="group" aria-label="設定の切り替え">
-        <button type="button" data-tab="backup" aria-pressed="true">バックアップ</button>
-        <!-- 取り分けたデータがある・保存を止めているときだけ、右上に点を出す -->
-        <button type="button" data-tab="data" aria-pressed="false">データの削除<span class="tab-dot" id="data-tab-dot" hidden><span class="sr-only">（確認が必要なデータがあります）</span></span></button>
-        <button type="button" data-tab="app" aria-pressed="false">このアプリ</button>
-      </div>
+      <nav class="card settings-menu" id="settings-menu" aria-label="設定の項目">
+        <ul class="menu-list">
+          <li>
+            <button type="button" class="menu-row" data-page="backup">
+              <span class="menu-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path class="ico-line" d="M12 4v11"/>
+                  <path class="ico-line" d="M7.5 10.5L12 15l4.5-4.5"/>
+                  <path class="ico-line" d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/>
+                </svg>
+              </span>
+              <span class="menu-text">
+                <span class="menu-title">バックアップ</span>
+                <span class="menu-sub">書き出し・読み込み</span>
+              </span>
+              <span class="menu-chevron" aria-hidden="true">›</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="menu-row" data-page="data">
+              <span class="menu-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path class="ico-line" d="M4 7h16"/>
+                  <path class="ico-line" d="M9 7V4.5h6V7"/>
+                  <path class="ico-line" d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/>
+                  <path class="ico-line" d="M10 11v6M14 11v6"/>
+                </svg>
+              </span>
+              <span class="menu-text">
+                <!-- 取り分けたデータがある・保存を止めているときだけ、名前の横に点を出す -->
+                <span class="menu-title">データの削除<span class="menu-dot" id="data-menu-dot" hidden><span class="sr-only">（確認が必要なデータがあります）</span></span></span>
+                <span class="menu-sub">取り分けたデータ・すべて削除</span>
+              </span>
+              <span class="menu-chevron" aria-hidden="true">›</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="menu-row" data-page="app">
+              <span class="menu-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle class="ico-line" cx="12" cy="12" r="9"/>
+                  <path class="ico-line" d="M12 11v5.5"/>
+                  <path class="ico-line" d="M12 7.5v.01"/>
+                </svg>
+              </span>
+              <span class="menu-text">
+                <span class="menu-title">このアプリ</span>
+                <span class="menu-sub">アプリの紹介・使い方</span>
+              </span>
+              <span class="menu-chevron" aria-hidden="true">›</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
 
       <!-- ----- バックアップ ----- -->
-      <div class="settings-panel" data-panel="backup">
+      <!-- 各ページの上に「‹（一覧に戻る）・ページ名」。ページ名は、移ってきたときにフォーカスを受ける（tabindex="-1"） -->
+      <div class="settings-page" data-page="backup" hidden>
+      <div class="page-nav">
+        <button type="button" class="icon-btn" data-back aria-label="設定の一覧に戻る">‹</button>
+        <h2 class="page-title" tabindex="-1">バックアップ</h2>
+      </div>
       <div class="card">
-        <h2 class="section-title">バックアップ</h2>
+        <h3 class="section-title">書き出し・読み込み</h3>
         <p class="section-note">記録はこの端末の中だけに保存されています。機種変更やアプリの削除に備えて、ときどき書き出しておくと安心です。</p>
         <p class="section-note">書き出したファイルは「ファイル」アプリに保存してください。LINE やメールで送ると、ほかの人に中身を見られるおそれがあります。</p>
         <p class="backup-info" id="backup-info"></p>
@@ -200,7 +260,7 @@
 
       <!-- ファイルを読み込んだあとだけ出す -->
       <div class="card" id="undo-import-card" hidden>
-        <h2 class="section-title">読み込む前の記録</h2>
+        <h3 class="section-title">読み込む前の記録</h3>
         <p class="section-note">ファイルを読み込む前の記録（<span id="undo-import-info"></span>）を取ってあります。読み込みを取り消したいときは「元に戻す」を押してください。</p>
         <div class="settings-actions">
           <button type="button" class="sub-btn" id="undo-import">元に戻す</button>
@@ -210,10 +270,14 @@
       </div>
 
       <!-- ----- データの削除 ----- -->
-      <div class="settings-panel" data-panel="data" hidden>
+      <div class="settings-page" data-page="data" hidden>
+      <div class="page-nav">
+        <button type="button" class="icon-btn" data-back aria-label="設定の一覧に戻る">‹</button>
+        <h2 class="page-title" tabindex="-1">データの削除</h2>
+      </div>
       <!-- 保存データが壊れていたとき・保存を止めているときだけ出す -->
       <div class="card" id="broken-card" hidden>
-        <h2 class="section-title">取り分けたデータ</h2>
+        <h3 class="section-title">取り分けたデータ</h3>
         <p class="section-note" id="broken-note"></p>
         <div class="settings-actions">
           <button type="button" class="sub-btn" id="broken-export">書き出す</button>
@@ -222,7 +286,7 @@
       </div>
 
       <div class="card">
-        <h2 class="section-title">すべてのデータを削除</h2>
+        <h3 class="section-title">すべてのデータを削除</h3>
         <p class="section-note">記録・取り分けたデータ・書きかけを、この端末からすべて消します。元には戻せないので、先に書き出しておくと安心です。</p>
         <div class="settings-actions">
           <button type="button" class="delete-btn" id="delete-all">すべて削除する</button>
@@ -231,9 +295,13 @@
       </div>
 
       <!-- ----- このアプリ ----- -->
-      <div class="settings-panel" data-panel="app" hidden>
+      <div class="settings-page" data-page="app" hidden>
+      <div class="page-nav">
+        <button type="button" class="icon-btn" data-back aria-label="設定の一覧に戻る">‹</button>
+        <h2 class="page-title" tabindex="-1">このアプリ</h2>
+      </div>
       <div class="card">
-        <h2 class="section-title">アプリを紹介する</h2>
+        <h3 class="section-title">アプリを紹介する</h3>
         <p class="section-note">LINE やメッセージで、このアプリのリンクを送れます。紹介しても、あなたの記録は相手に見えません（記録はこの端末の中だけにあります）。</p>
         <p class="share-url" id="share-url"></p>
         <div class="settings-actions">
@@ -243,7 +311,7 @@
       </div>
 
       <div class="card">
-        <h2 class="section-title">ホーム画面での使い方</h2>
+        <h3 class="section-title">ホーム画面での使い方</h3>
         <ul class="usage-list">
           <li><b>iPhone・iPad</b>：Safari の共有ボタン（<span class="nowrap">□に↑</span>）→「ホーム画面に追加」</li>
           <li><b>PC</b>：Chrome・Edge のアドレスバーの右にある「インストール」</li>

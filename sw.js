@@ -8,20 +8,20 @@
 // ファイルを増やしたら tools/stamp-sw.mjs の APP_FILES に足す（tests/test-pwa.mjs が漏れを確かめる）
 
 // ===== 更新印ここから（tools/stamp-sw.mjs が書き換える。手で直さない） =====
-const CACHE_NAME = 'kimochi-diary-190f2478dd8b';
+const CACHE_NAME = 'kimochi-diary-32f5c3e521b0';
 const APP_FILES = {
-  './': 'bf4c37b5a6e03fa73cb02946dcf2792aba564afa9909efe4bcf11cdc6c466520',
-  'index.html': 'bf4c37b5a6e03fa73cb02946dcf2792aba564afa9909efe4bcf11cdc6c466520',
-  'style.css': 'f45e913ad58278e183e02819f72eb58fa8e46b8809419c3a9da8b58eed0815d2',
+  './': '7b34f7b4580e5f1d9542f8f7bef194b0abc54b133442f39ca932dd6ae30ea0bb',
+  'index.html': '7b34f7b4580e5f1d9542f8f7bef194b0abc54b133442f39ca932dd6ae30ea0bb',
+  'style.css': '6a23413bd99c22394aa06a4a1797998779500b07580fae4396d28d30e36e32d1',
   'manifest.webmanifest': '77207f237ebc14db658fc8d1882cf6c857148a5905f9f5a452eb291e9fe1f501',
   'js/common.js': 'bc71353d284d0f577485378fdacb6c89f5bf2f5bdeee1ca56510a392b07f7244',
   'js/storage.js': 'e4a7dfcd7aee5d0d5aea8e571c33792b30572524bda207a24583923b1aa20009',
   'js/toast.js': 'a402f0897b19bc023842ebe06a612ad51923cd71e02e4a1b185f64643af17fbf',
-  'js/record.js': '283b81dc5983d31c573a351917e1bbb771eaa8f6d45f614bad061cf16216c6de',
-  'js/calendar.js': '0018d103cb9d8e0ae3a956bb3f667f5e82e16baf41695e1668a2933e204ff7c3',
+  'js/record.js': '609058f872799ee10aea47fe1eb188dbc286294503e9eb48479a49cc2a4c1f08',
+  'js/calendar.js': 'c5de82185392d0a6e3050d8749c402b37a81e9aac5df7cf00fdd075f1b4eec6d',
   'js/graph.js': '153155019f5334aaf1ee4534c6c98f1ccb3f8db6d527a37d6f9702eafaf177e5',
-  'js/settings.js': 'd8c153f03e5eb0f2f65975e7a01b02ff40c009e89d26db8d3a4bbfffe1d7716f',
-  'js/main.js': '094777ac802d4311edc09cb18345ef80b8cde5e367e9b6e6ef7564e1b20d9ba5',
+  'js/settings.js': 'c8fb5379ddcb651f64154d6cb2a0ea593259e0e575a1cacabcae19f39838a54f',
+  'js/main.js': 'fd1ea4091fced66f6393111b822165ee16e579f1a909611653aaa710dc3c723b',
   'images/botanical-shadow.webp': 'aa4c3b29a2f512707192756ebffab2f428e94baf95ce7bd385b73ac715ab5d51',
   'icons/icon.svg': '2be433dd9f88ebde51bcfbe6036e2191f496c1b9015fe5a76b9785c8336518d1',
   'icons/icon-192.png': '30c2e78570d71409f654b9a2bbfb36dec0365f4049325f99dd9e2d804a801b01',

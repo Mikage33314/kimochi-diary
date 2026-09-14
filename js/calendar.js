@@ -105,9 +105,12 @@ function renderDayDetail() {
 
   const mood = MOODS[r.mood - 1];
   const cond = CONDITIONS[r.condition - 1];
-  const sleepText = r.sleeps.length
-    ? `${formatHours(totalSleepHours(r))}（${r.sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`
-    : '—';
+  // 空の項目は「—」で出す（無いのか、隠れているのか分からなくならないように）。
+  // 「—」は読み上げで読まれない・読み方が端末で違うことがあるので、読み上げには「なし」と伝える
+  const none = '<span aria-hidden="true">—</span><span class="sr-only">なし</span>';
+  const sleepHtml = r.sleeps.length
+    ? escapeHtml(`${formatHours(totalSleepHours(r))}（${r.sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`)
+    : none;
 
   // メモ・頑張ったことは利用者が入力した文字なので escapeHtml を通してから入れる
   dayDetailEl.innerHTML = `${title}
@@ -116,9 +119,9 @@ function renderDayDetail() {
       <span class="chip">${cond.icon} 体調：${cond.label}</span>
     </div>
     <dl class="detail-list">
-      <dt>睡眠</dt><dd>${escapeHtml(sleepText)}</dd>
-      ${r.memo ? `<dt>メモ</dt><dd>${escapeHtml(r.memo)}</dd>` : ''}
-      ${r.effort ? `<dt>頑張ったこと</dt><dd>${escapeHtml(r.effort)}</dd>` : ''}
+      <dt>睡眠</dt><dd>${sleepHtml}</dd>
+      <dt>メモ</dt><dd>${r.memo ? escapeHtml(r.memo) : none}</dd>
+      <dt>頑張ったこと</dt><dd>${r.effort ? escapeHtml(r.effort) : none}</dd>
     </dl>
     <button type="button" class="sub-btn" data-edit>この日を編集する</button>`;
 }
@@ -164,8 +167,20 @@ calendarEl.addEventListener('click', (e) => {
   selectedKey = cell.dataset.date;
   renderCalendarView();
   // 描き直すと押したボタンは作り直されて、フォーカスが外れる。同じ日のボタンへ戻す
-  calendarEl.querySelector(`[data-date="${selectedKey}"]`).focus();
+  calendarEl.querySelector(`[data-date="${selectedKey}"]`).focus({ preventScroll: true });
+  revealDayDetail();
 });
+
+// 選んだ日の詳細が下のタブバーに隠れていたら、見える所までスクロールする（カレンダーの下にあるので、
+// スマホでは詳細の下の方〔頑張ったこと など〕が隠れやすい）。詳細が画面より高いときは、上端が見える所で止める
+function revealDayDetail() {
+  const box = dayDetailEl.getBoundingClientRect();
+  const visibleBottom = document.getElementById('tabs').getBoundingClientRect().top - 16;
+  const by = Math.min(box.bottom - visibleBottom, box.top - 16);
+  if (by <= 0) return;
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollBy({ top: by, behavior: smooth ? 'smooth' : 'auto' });
+}
 
 dayDetailEl.addEventListener('click', (e) => {
   if (!e.target.closest('[data-edit]')) return;

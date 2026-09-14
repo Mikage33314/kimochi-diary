@@ -1,4 +1,4 @@
-// ===== 設定画面：タブ（バックアップ／データの削除／このアプリ）=====
+// ===== 設定画面：項目の一覧 → 各ページ（バックアップ／データの削除／このアプリ）=====
 // バックアップ（書き出し・読み込み・元に戻す）、取り分けたデータ、すべて削除、アプリの紹介。
 // 保存まわりは storage.js の関数を使う（ここでは localStorage に直接触らない）
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 読み込めるファイルの大きさの上限（5MB）
@@ -6,8 +6,8 @@ const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 読み込めるファイルの大�
 const APP_URL = 'https://mikage33314.github.io/kimochi-diary/';
 const APP_NAME = 'Dear me+';
 const SHARE_TEXT = `気分・体調・睡眠を1分で記録できる日記アプリ『${APP_NAME}』`;
-const settingsTabsEl = document.getElementById('settings-tabs');
-const dataTabDot = document.getElementById('data-tab-dot');
+const settingsMenuEl = document.getElementById('settings-menu');
+const dataMenuDot = document.getElementById('data-menu-dot');
 const shareBtn = document.getElementById('share-btn');
 const shareStatusEl = document.getElementById('share-status');
 const exportBtn = document.getElementById('export-btn');
@@ -69,20 +69,35 @@ function renderSettings() {
   brokenCard.hidden = broken.length === 0 && !storageLocked;
   brokenDeleteBtn.hidden = broken.length === 0;
   brokenNoteEl.textContent = brokenNoteText(broken.length);
-  dataTabDot.hidden = brokenCard.hidden; // 別のタブを見ていても気づけるように、「データの削除」に点を付ける
+  dataMenuDot.hidden = brokenCard.hidden; // 一覧を見ていても気づけるように、「データの削除」の行に点を付ける
   shareStatusEl.textContent = '';
 }
 
-// 設定のタブを切り替える。どのタブを見ていたかは、アプリを開いている間だけ覚えておく
-function showSettingsTab(name) {
-  for (const btn of settingsTabsEl.children) btn.setAttribute('aria-pressed', btn.dataset.tab === name);
-  for (const panel of document.querySelectorAll('.settings-panel')) panel.hidden = panel.dataset.panel !== name;
+// 設定のページを切り替える。name が null なら項目の一覧。
+// どのページを見ていたかは、アプリを開いている間だけ覚えておく（書き出しで共有シートから戻ってきても、同じページのまま）
+function showSettingsPage(name) {
+  settingsMenuEl.hidden = Boolean(name);
+  for (const page of document.querySelectorAll('.settings-page')) page.hidden = page.dataset.page !== name;
 }
 
-settingsTabsEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-tab]');
-  if (btn) showSettingsTab(btn.dataset.tab);
+// 一覧の行を押したら、そのページへ。押した行は隠れるので、フォーカスはページ名へ移す（読み上げでページ名が伝わる）
+settingsMenuEl.addEventListener('click', (e) => {
+  const row = e.target.closest('[data-page]');
+  if (!row) return;
+  showSettingsPage(row.dataset.page);
+  window.scrollTo(0, 0);
+  document.querySelector(`.settings-page[data-page="${row.dataset.page}"] .page-title`).focus({ preventScroll: true });
 });
+
+// 「‹」で一覧へ戻る。フォーカスは、さっき開いた項目の行へ戻す
+for (const btn of document.querySelectorAll('.settings-page [data-back]')) {
+  btn.addEventListener('click', () => {
+    const name = btn.closest('.settings-page').dataset.page;
+    showSettingsPage(null);
+    window.scrollTo(0, 0);
+    settingsMenuEl.querySelector(`[data-page="${name}"]`).focus({ preventScroll: true });
+  });
+}
 
 // ファイルを端末に渡す。iPhone は共有シート（「"ファイル"に保存」を選べる）、使えなければダウンロード。
 // 結果は 'shared'（共有した）/ 'downloaded'（ダウンロードした）/ 'cancelled'（共有シートを閉じた）
@@ -233,7 +248,8 @@ deleteAllBtn.addEventListener('click', () => {
   const left = removeAllData();
   resetRecordForm();
   renderSettings();
-  if (left) settingsStatusEl.textContent = `一部のデータを削除できませんでした（${left}件）`;
+  // 知らせはお知らせで出す（settingsStatusEl はバックアップのページにあり、このページからは見えないため）
+  if (left) showToast({ icon: '⚠️', text: `一部のデータを削除できませんでした（${left}件）`, duration: 6000 });
   else showToast({ text: 'すべてのデータを削除しました' });
 });
 
