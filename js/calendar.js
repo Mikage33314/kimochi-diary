@@ -56,6 +56,7 @@ function renderCalendar() {
     : 'この月の記録はまだありません';
 
   calNextBtn.disabled = isCurrentOrFutureMonth(calYear, calMonth); // 今月より先へは進めない
+  calPrevBtn.disabled = calYear * 12 + calMonth <= MIN_YEAR * 12;  // 2000年1月より前へは戻れない
 }
 
 function isInShownMonth(key) {
@@ -111,8 +112,9 @@ function moveMonth(delta) {
   calYear = next.year;
   calMonth = next.month;
   renderCalendarView();
-  // 今月に着いて › が押せなくなると、フォーカスの行き場がなくなるので ‹ へ移す
+  // 端に着いてボタンが押せなくなると、フォーカスの行き場がなくなるので反対側へ移す
   if (delta > 0 && calNextBtn.disabled) calPrevBtn.focus();
+  if (delta < 0 && calPrevBtn.disabled) calNextBtn.focus();
 }
 
 // 日付が変わったとき（main.js から呼ぶ）：今月・今日を表示し直す

@@ -1,5 +1,5 @@
 // ===== 設定画面：バックアップ（書き出し・読み込み・元に戻す）、取り分けたデータ、すべて削除 =====
-const LAST_BACKUP_KEY = KEY_PREFIX + 'last-backup'; // 最後に書き出した日時（ISO 形式の文字列）
+// 保存まわりは storage.js の関数を使う（ここでは localStorage に直接触らない）
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 読み込めるファイルの大きさの上限（5MB）
 const exportBtn = document.getElementById('export-btn');
 const importBtn = document.getElementById('import-btn');
@@ -16,30 +16,6 @@ const brokenExportBtn = document.getElementById('broken-export');
 const brokenDeleteBtn = document.getElementById('broken-delete');
 const deleteAllBtn = document.getElementById('delete-all');
 
-function readLastBackup() {
-  try {
-    const iso = localStorage.getItem(LAST_BACKUP_KEY);
-    const d = iso ? new Date(iso) : null;
-    return d && !Number.isNaN(d.getTime()) ? d : null;
-  } catch {
-    return null;
-  }
-}
-
-// 読み込む前に取っておいた記録。無い・読めなければ null
-function readBeforeImport() {
-  let data;
-  try {
-    data = JSON.parse(localStorage.getItem(BEFORE_IMPORT_KEY));
-  } catch {
-    return null;
-  }
-  const result = normalizeRecords(data?.records);
-  if (!result) return null;
-  const savedAt = new Date(data.exportedAt);
-  return { records: result.records, savedAt: Number.isNaN(savedAt.getTime()) ? null : savedAt };
-}
-
 // 「今日」「昨日」「3日前」
 function daysAgoText(date) {
   const diff = Math.round((fromDateKey(toDateKey(new Date())) - fromDateKey(toDateKey(date))) / 86400000);
@@ -47,14 +23,27 @@ function daysAgoText(date) {
   return diff === 1 ? '昨日' : `${diff}日前`;
 }
 
+// 取り分けたデータのカードの説明文
+function brokenNoteText(count) {
+  if (storageLockReason === 'newer') {
+    return '新しい版のアプリで保存した記録があるため、上書きしないよう保存を止めています。アプリを上にスワイプして閉じてから開き直すと、新しい版になります（アイコンは削除しないでください）。念のため「書き出す」で保管もできます。';
+  }
+  if (storageLockReason === 'rewrite') {
+    return `保存データの一部が読めなかったため、元のデータを取り分けました（${count}件）。ただ、直して保存し直す空きがないため、保存を止めています。「書き出す」で保管してから「削除する」で空きを作ると、保存を再開します。`;
+  }
+  if (storageLocked) {
+    return '保存データを読み込めず、取り分ける空きも無いため、上書きしないよう保存を止めています。まず「書き出す」で元のデータを保管してください。空きができると保存を再開します。';
+  }
+  return `保存データの一部が読めなかったため、元のデータを消さずに取っておきました（${count}件）。書き出して保管できます。`;
+}
+
 function renderSettings() {
   const count = Object.keys(loadRecords()).length; // ここで読み直すと、止めていた保存の再開も試される
   const last = readLastBackup();
-  const lastText = last ? `${formatDateJa(toDateKey(last))}（${daysAgoText(last)}）` : 'まだありません';
   // 「まだありま／せん」のように途中で改行されないよう、日付の部分はひとかたまりにする
   const lastEl = document.createElement('span');
   lastEl.className = 'nowrap';
-  lastEl.textContent = lastText;
+  lastEl.textContent = last ? `${formatDateJa(toDateKey(last))}（${daysAgoText(last)}）` : 'まだありません';
   backupInfoEl.textContent = `記録 ${count}日分 ・ 前回のバックアップ：`;
   backupInfoEl.append(lastEl);
   settingsStatusEl.textContent = '';
@@ -70,9 +59,7 @@ function renderSettings() {
   const broken = listBrokenKeys();
   brokenCard.hidden = broken.length === 0 && !storageLocked;
   brokenDeleteBtn.hidden = broken.length === 0;
-  brokenNoteEl.textContent = storageLocked
-    ? '保存データを読み込めず、取り分ける空きも無いため、上書きしないよう保存を止めています。まず「書き出す」で元のデータを保管してください。空きができると保存を再開します。'
-    : `保存データの一部が読めなかったため、元のデータを消さずに取っておきました（${broken.length}件）。書き出して保管できます。`;
+  brokenNoteEl.textContent = brokenNoteText(broken.length);
 }
 
 // ファイルを端末に渡す。iPhone は共有シート（「"ファイル"に保存」を選べる）、使えなければダウンロード。
@@ -99,10 +86,6 @@ async function shareOrDownload(filename, text) {
   return 'downloaded';
 }
 
-function makeBackup(records) {
-  return { app: 'kimochi-diary', version: BACKUP_VERSION, exportedAt: new Date().toISOString(), records };
-}
-
 // ファイル名からは中身が分からないようにする（共有シートや「ファイル」アプリで人目に触れるため）
 exportBtn.addEventListener('click', async () => {
   const records = loadRecords();
@@ -112,7 +95,7 @@ exportBtn.addEventListener('click', async () => {
   }
   const result = await shareOrDownload(`kd-backup-${toDateKey(new Date())}.json`, JSON.stringify(makeBackup(records), null, 2));
   if (result === 'cancelled') return;
-  writeStorage(LAST_BACKUP_KEY, new Date().toISOString()); // 日時を記録できなくても、書き出し自体は済んでいる
+  markBackedUp();
   renderSettings();
   showToast({ icon: '📦', text: '書き出しました' });
 });
@@ -129,54 +112,34 @@ importFileInput.addEventListener('change', async () => {
     return;
   }
 
-  let data;
-  try {
-    data = JSON.parse(await file.text());
-  } catch {
-    settingsStatusEl.textContent = 'JSON ファイルとして読めませんでした';
+  const result = parseBackupText(await file.text());
+  if (result.error) {
+    settingsStatusEl.textContent = result.error;
     return;
   }
-
-  // 書き出した形式 { app, version, records } と、記録だけの形式の両方を受け付ける。
-  // 新しい版のアプリで書き出したファイルは、形式が変わっているかもしれないので読まない
-  const isBackup = data?.app === 'kimochi-diary';
-  if (isBackup && !(Number.isInteger(data.version) && data.version <= BACKUP_VERSION)) {
-    settingsStatusEl.textContent = '新しい版のアプリで書き出したファイルのため、読み込めません';
-    return;
-  }
-  // 中身は、起動時の読み込みと同じ normalizeRecords() で検査する。今日より後の日付は除く
-  const result = normalizeRecords(isBackup ? data.records : data, { maxKey: toDateKey(new Date()) });
-  const count = result ? Object.keys(result.records).length : 0;
-  if (count === 0) {
-    settingsStatusEl.textContent = 'きもち日記の記録が見つかりませんでした';
-    return;
-  }
-
-  const currentRecords = loadRecords();
+  const current = Object.keys(loadRecords()).length;
   if (storageLocked) {
     settingsStatusEl.textContent = saveErrorMessage();
     return;
   }
+  // 除く記録の件数を、理由ごとに示す
   const notes = [];
+  if (result.future) notes.push(`今日より後の日付の記録 ${result.future}件は除きます。`);
   if (result.dropped) notes.push(`読めない記録 ${result.dropped}件は除きます。`);
   if (result.changed) notes.push(`一部が読めない記録 ${result.changed}件は、読めた部分だけ入れます。`);
-  const current = Object.keys(currentRecords).length;
-  const message = `${count}日分の記録を読み込みます。\n今の記録（${current}日分）はすべて置き換わります（あとで元に戻せます）。よろしいですか？`;
+  const message = `${result.count}日分の記録を読み込みます。\n今の記録（${current}日分）はすべて置き換わります（あとで元に戻せます）。よろしいですか？`;
   if (!confirm([message, ...notes].join('\n') + draftDiscardNote())) return;
 
-  // 置き換える前に、今の記録を取っておく（「元に戻す」用。直前の1回分だけ）
-  if (!writeStorage(BEFORE_IMPORT_KEY, JSON.stringify(makeBackup(currentRecords)))) {
-    settingsStatusEl.textContent = '空き容量が足りず、今の記録を取っておけませんでした。先に「書き出す」で保管してください';
-    return;
-  }
-  if (!saveRecords(result.records)) {
-    localStorage.removeItem(BEFORE_IMPORT_KEY); // 置き換えていないので、取っておく必要もない
-    settingsStatusEl.textContent = saveErrorMessage();
+  const outcome = replaceRecords(result.records);
+  if (outcome !== 'ok') {
+    settingsStatusEl.textContent = outcome === 'no-space'
+      ? '空き容量が足りず、今の記録を取っておけませんでした。先に「書き出す」で保管してください'
+      : saveErrorMessage();
     return;
   }
   reloadRecordForm();
   renderSettings();
-  showToast({ icon: '📥', title: `${count}日分を読み込みました`, text: '取り消すときは「元に戻す」を押してください' });
+  showToast({ icon: '📥', title: `${result.count}日分を読み込みました`, text: '取り消すときは「元に戻す」を押してください' });
 });
 
 undoImportBtn.addEventListener('click', () => {
@@ -193,7 +156,7 @@ undoImportBtn.addEventListener('click', () => {
     settingsStatusEl.textContent = saveErrorMessage();
     return;
   }
-  localStorage.removeItem(BEFORE_IMPORT_KEY);
+  clearBeforeImport();
   reloadRecordForm();
   renderSettings();
   showToast({ icon: '↩️', text: '読み込む前の記録に戻しました' });
@@ -201,36 +164,20 @@ undoImportBtn.addEventListener('click', () => {
 
 undoImportDeleteBtn.addEventListener('click', () => {
   if (!confirm('読み込む前の記録を削除しますか？\n読み込みを取り消せなくなります')) return;
-  localStorage.removeItem(BEFORE_IMPORT_KEY);
+  clearBeforeImport();
   renderSettings();
   showToast({ text: '削除しました' });
 });
 
 brokenExportBtn.addEventListener('click', async () => {
-  const items = {};
-  for (const key of listBrokenKeys()) {
-    try {
-      items[key] = localStorage.getItem(key);
-    } catch {
-      // 読めないものは飛ばす
-    }
-  }
-  // 保存を止めている間は、読めなかった保存データそのものも入れる
-  if (storageLocked) items[STORAGE_KEY] = readRawRecords();
-  const result = await shareOrDownload(`kd-stash-${toDateKey(new Date())}.json`, JSON.stringify(items, null, 2));
+  const result = await shareOrDownload(`kd-stash-${toDateKey(new Date())}.json`, JSON.stringify(collectStash(), null, 2));
   if (result !== 'cancelled') showToast({ text: '書き出しました' });
 });
 
 brokenDeleteBtn.addEventListener('click', () => {
   if (!confirm('取り分けたデータを削除しますか？元には戻せません')) return;
   const wasLocked = storageLocked;
-  for (const key of listBrokenKeys()) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // 消せないものは残る（次に開いたときにまた表示される）
-    }
-  }
+  removeBrokenData();
   renderSettings(); // 空きができれば、ここで取り分けと保存の再開が行われる
   showToast({ text: wasLocked && !storageLocked ? '空きができたので、保存を再開しました' : '削除しました' });
 });

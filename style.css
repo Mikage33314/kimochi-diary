@@ -211,6 +211,32 @@ input[type="time"] {
 }
 input::-webkit-date-and-time-value { text-align: left; }
 
+/* ===== ホーム画面版でないときの案内 =====
+   カードより控えめな淡いサーモンの地。右上の ✕ は見た目より広く、44px を押せるようにする */
+.install-guide {
+  position: relative;
+  padding: 14px 48px 14px 16px;
+  font-size: .875rem;
+  color: var(--text);
+  background: var(--accent-soft);
+  border-radius: var(--r-l);
+}
+.install-guide p { margin: 0; }
+.install-guide p + p { margin-top: 6px; }
+.install-guide .guide-title { font-size: .9375rem; font-weight: 700; }
+.guide-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 44px;
+  height: 44px;
+  font-size: .875rem;
+  color: var(--text-sub);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+
 /* ===== 昨日の分もつける？ ===== */
 .nudge {
   display: flex;
@@ -425,6 +451,20 @@ input::-webkit-date-and-time-value { text-align: left; }
 }
 .toast-icon { font-size: 1.5rem; line-height: 1; }
 .toast-title { font-size: .8125rem; }
+/* 「元に戻す」など、お知らせに添えるボタン。枠（toast-region）は押せない設定なので、ボタンだけ押せるようにする */
+.toast-action {
+  flex-shrink: 0;
+  min-height: 44px;
+  margin-left: 4px;
+  padding: 0 16px;
+  font-size: .875rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--card);
+  border: 0;
+  border-radius: var(--r-pill);
+  pointer-events: auto;
+}
 
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-16px) scale(.95); }
@@ -611,7 +651,8 @@ button.cal-cell:not([data-mood]) { background: none; }
   font-variant-numeric: tabular-nums;
 }
 
-.chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* 見出しと凡例が1行に収まらないとき（320px 幅の「気分・体調（月平均）」など）は、凡例を次の行へ回す */
+.chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
 .chart-title { margin: 0; font-size: 1rem; font-weight: 700; }
 .chart-legend { display: flex; gap: 12px; font-size: .75rem; color: var(--muted); }
 .key::before {
@@ -645,8 +686,48 @@ button.cal-cell:not([data-mood]) { background: none; }
 /* 記録の無い日をまたぐ線は、細い点線で控えめに（薄くすると 3:1 に届かないので、濃さはそのまま） */
 .chart .gap-line { fill: none; stroke-width: 1.5; stroke-dasharray: 1 5; stroke-linecap: round; }
 .chart .dot { stroke: var(--card); stroke-width: 1.5; }
+/* 年ごとの表示で、記録が少ない月は目立たせない。
+   点は白抜き（中をカードの色で塗り、縁を線の色にする）。半径を1小さくし（graph.js）、縁も細めにして、普通の点より大きく見せない。
+   睡眠の棒は淡く塗り、縁だけ元の色にする（形は 3:1 で見える） */
+.chart .dot.is-few { fill: var(--card); stroke-width: 1.5; }
+.chart .dot.is-few.series-mood { stroke: var(--line-mood); }
+.chart .dot.is-few.series-condition { stroke: var(--line-condition); }
+.chart-note { margin: 8px 0 0; font-size: .75rem; color: var(--muted); }
 .chart .bar-sleep { fill: var(--bar-sleep); }
+.chart .bar-sleep.is-few { fill-opacity: .35; stroke: var(--bar-sleep); stroke-width: 1.5; }
 .chart .bar-label { font-size: 13.5px; font-weight: 700; fill: var(--text); }
+
+/* 年ごとの月別の表（たたんで開く）。見出しの行を 44px にして押しやすくする */
+.year-table { padding-block: 8px; }
+.year-table[open] { padding-bottom: 16px; }
+.year-table summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--r-s);
+}
+.year-table summary::-webkit-details-marker { display: none; }
+.year-table summary::after {
+  content: "›";
+  display: inline-block;
+  font-size: 1.25rem;
+  color: var(--muted);
+  transform: rotate(90deg);
+  transition: transform .15s;
+}
+.year-table[open] summary::after { transform: rotate(-90deg); }
+.year-table summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* 狭い画面で表が収まらなければ、表だけを横にスクロールする（画面全体ははみ出さない） */
+.table-scroll { overflow-x: auto; margin-top: 4px; }
+.year-table table { width: 100%; border-collapse: collapse; font-size: .875rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.year-table th,
+.year-table td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+.year-table th:first-child { text-align: left; }
+.year-table thead th { font-size: .75rem; font-weight: 400; color: var(--muted); }
 
 /* ===== 設定 ===== */
 .section-title { margin: 0 0 8px; font-size: 1.125rem; font-weight: 700; }

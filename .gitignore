@@ -2,6 +2,7 @@
 # 資料
 CLAUDE.md
 要件定義.md
+引き継ぎ.md
 # 開発用（テスト・アイコンの書き出し）
 tests/
 tools/

@@ -9,9 +9,15 @@ function toastPart(tag, className, text) {
   return el;
 }
 
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastRegion.replaceChildren();
+}
+
 // 画面の上にお知らせを出す。読み上げ用の枠（role="status"）は常に表示しておき、中身だけを入れ替える。
-// 毎回新しい要素を作るので、弾むアニメーションも毎回最初から再生される
-function showToast({ text, title = '', icon = '', duration = 2600 }) {
+// 毎回新しい要素を作るので、弾むアニメーションも毎回最初から再生される。
+// action（{ label, onClick }）を渡すと、「元に戻す」のようなボタンを添える（押すとお知らせは閉じる）
+function showToast({ text, title = '', icon = '', duration = 2600, action = null }) {
   const box = document.createElement('div');
   box.className = 'toast';
   if (icon) {
@@ -23,8 +29,17 @@ function showToast({ text, title = '', icon = '', duration = 2600 }) {
   if (title) body.append(toastPart('div', 'toast-title', title));
   body.append(toastPart('div', 'toast-text', text));
   box.append(body);
+  if (action) {
+    const btn = toastPart('button', 'toast-action', action.label);
+    btn.type = 'button';
+    btn.addEventListener('click', () => {
+      hideToast();
+      action.onClick();
+    });
+    box.append(btn);
+  }
 
   toastRegion.replaceChildren(box);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastRegion.replaceChildren(), duration);
+  toastTimer = setTimeout(hideToast, duration);
 }

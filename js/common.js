@@ -1,226 +1,57 @@
-// ===== 共通部品：設定・データの検査と読み書き・日付と睡眠の計算 =====
-// 画面（DOM）に依存しない関数だけを置き、各画面から使う
+// ===== 共通部品：定数・選択肢の定義・日付と睡眠の計算・文字の整形 =====
+// 画面（DOM）にも保存（localStorage）にも依存しない関数だけを置く。保存まわりは storage.js
 
-// localStorage のキーはすべて KEY_PREFIX で始める（「すべて削除」はこの前置きで消す）
-const KEY_PREFIX = 'kimochi-diary-';
-const STORAGE_KEY = KEY_PREFIX + 'records';
-const BROKEN_KEY_PREFIX = KEY_PREFIX + 'broken-'; // 読めなかった元データの取り分け先（後ろに日時の数値）
-const BEFORE_IMPORT_KEY = KEY_PREFIX + 'before-import'; // 読み込む前の記録（元に戻す用）
-const DRAFT_KEY = KEY_PREFIX + 'draft'; // 記録画面の書きかけ
-const BACKUP_VERSION = 1; // バックアップ形式の版。これより新しい版のファイルは読み込まない
 const MIN_DATE_KEY = '2000-01-01'; // 記録できる一番古い日
-const MAX_SLEEPS = 3; // 1日に登録できる睡眠の最大件数
-const NIGHT_END_HOUR = 4; // 0時〜4時前に開いたら、前日を「記録する日」の初期値にする
+const MIN_YEAR = Number(MIN_DATE_KEY.slice(0, 4)); // カレンダー・グラフで戻れる一番古い年
+const MAX_SLEEPS = 3;              // 1日に登録できる睡眠の最大件数
+// 文字数の上限。数え方は UTF-16 の単位（入力欄の maxlength と同じ。絵文字の多くは2と数える）
+const MEMO_MAX = 100;              // ひとことメモ（index.html の maxlength と同じ値）
+const EFFORT_MAX = 200;            // 頑張ったこと（同上）
+const NIGHT_END_HOUR = 4;          // 0時〜4時前に開いたら、前日を「記録する日」の初期値にする
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/; // "00:00"〜"23:59"
 
 // 選択肢の定義。記録画面のボタン・カレンダー・グラフはすべてここを参照する
-// cheer（気分）と care（体調が悪い日）は、保存したときに返す言葉（共感）
+// cheers（気分）と cares（体調が悪い日）は、保存したときに返す言葉（共感）。毎回同じにならないよう数種類ずつ
 const MOODS = [
-  { value: 1, icon: '😢', label: 'つらい', cheer: '今日はゆっくり休んでね' },
-  { value: 2, icon: '😕', label: 'いまいち', cheer: 'おつかれさま。自分をいたわってね' },
-  { value: 3, icon: '😐', label: 'ふつう', cheer: '今日もおつかれさま' },
-  { value: 4, icon: '😊', label: 'いい感じ', cheer: 'いい一日でしたね' },
-  { value: 5, icon: '🥳', label: '最高', cheer: '最高の一日でしたね！' },
+  { value: 1, icon: '😢', label: 'つらい',
+    cheers: ['今日はゆっくり休んでね', '記録してくれてありがとう', 'つらい気持ち、ここに置いていってね', '今夜は自分をいたわってね'] },
+  { value: 2, icon: '😕', label: 'いまいち',
+    cheers: ['おつかれさま。自分をいたわってね', 'そんな日もあるよね', '記録してくれてありがとう', '温かくして休んでね'] },
+  { value: 3, icon: '😐', label: 'ふつう',
+    cheers: ['今日もおつかれさま', 'いつもの一日も、大切な一日', 'ほっと一息ついてね', '今日も記録できたね'] },
+  { value: 4, icon: '😊', label: 'いい感じ',
+    cheers: ['いい一日でしたね', 'その調子！', 'いいことがあったのかな', '明日もいい日になりますように'] },
+  { value: 5, icon: '🥳', label: '最高',
+    cheers: ['最高の一日でしたね！', 'うれしい気持ち、ここに残せたね', 'すてきな一日でしたね！', 'この気分、覚えておこうね'] },
 ];
 
 const CONDITIONS = [
-  { value: 1, icon: '🤒', label: '悪い', care: '体調が悪い中、おつかれさま。ゆっくり休んでね' },
-  { value: 2, icon: '😣', label: 'やや悪い', care: '無理せず、体をいたわってね' },
+  { value: 1, icon: '🤒', label: '悪い',
+    cares: ['体調が悪い中、おつかれさま。ゆっくり休んでね', '無理しないでね。記録してくれてありがとう', '今日は早めに休んでね'] },
+  { value: 2, icon: '😣', label: 'やや悪い',
+    cares: ['無理せず、体をいたわってね', '温かくして過ごしてね', '少しでも休めますように'] },
   { value: 3, icon: '😐', label: 'ふつう' },
   { value: 4, icon: '🙂', label: '良い' },
   { value: 5, icon: '💪', label: '絶好調' },
 ];
 
-// 保存したときに返す言葉。体調が悪い日は体調を気づかい、それ以外は気分に寄り添う
+// 保存したときに返す言葉。体調が悪い日は体調を気づかい、それ以外は気分に寄り添う。
+// 前回と同じ言葉が続かないように選ぶ
+let lastCheerText = '';
 function cheerFor(mood, condition) {
   const cond = CONDITIONS[condition - 1];
-  if (cond.care) return { icon: cond.icon, text: cond.care };
-  const m = MOODS[mood - 1];
-  return { icon: m.icon, text: m.cheer };
+  const source = cond.cares ? cond : MOODS[mood - 1];
+  const list = cond.cares ?? source.cheers;
+  const choices = list.filter((t) => t !== lastCheerText);
+  lastCheerText = choices[Math.floor(Math.random() * choices.length)];
+  return { icon: source.icon, text: lastCheerText };
 }
-
-// ----- データの検査 -----
-// localStorage や読み込んだファイルの中身は、形が崩れていることがある（手で編集した・壊れた など）。
-// 画面が使う前に必ずここを通して正しい形に直し、直せない記録は捨てる
-const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/; // "00:00"〜"23:59"
 
 // 1〜5 の整数に直す（"3" のような文字も数にする）。直せなければ null
 function toScore(v) {
   const n = typeof v === 'string' ? Number(v) : v;
   return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
-}
-
-// 1日分の記録を正しい形に直す。気分・体調が無い（直せない）記録は null。
-// 知らない項目（将来増える項目など）は、...r で消さずにそのまま残す
-function normalizeRecord(r) {
-  if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
-  const mood = toScore(r.mood);
-  const condition = toScore(r.condition);
-  if (mood === null || condition === null) return null;
-
-  const sleeps = (Array.isArray(r.sleeps) ? r.sleeps : [])
-    .filter((s) => s && TIME_PATTERN.test(s.start) && TIME_PATTERN.test(s.end) && s.start !== s.end)
-    .slice(0, MAX_SLEEPS)
-    .map((s) => ({ ...s }));
-
-  return {
-    ...r,
-    mood,
-    condition,
-    sleeps,
-    memo: typeof r.memo === 'string' ? r.memo.slice(0, 100) : '',
-    effort: typeof r.effort === 'string' ? r.effort.slice(0, 200) : '',
-  };
-}
-
-// 直したときに内容が減ったか（捨てた睡眠・切った文字・読めない値がある）。
-// "3" → 3 や、無い memo → '' のように、情報が減らない直し方は含めない
-function lostPart(r, rec) {
-  const sleeps = r.sleeps ?? [];
-  return !Array.isArray(sleeps) || sleeps.length !== rec.sleeps.length
-    || (r.memo != null && r.memo !== rec.memo)
-    || (r.effort != null && r.effort !== rec.effort);
-}
-
-// 記録全体を検査する。入れ物がオブジェクトでなければ null。
-// 日付キーが正しく、中身を直せた記録だけを records に残す。
-// 捨てた件数を dropped、残したが一部が減った件数を changed で返す。
-// maxKey を渡すと、それより後の日付も捨てる（ファイルの読み込みで未来の日を弾く）
-function normalizeRecords(data, { maxKey } = {}) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const records = {};
-  let dropped = 0;
-  let changed = 0;
-  for (const [key, r] of Object.entries(data)) {
-    const keyOk = isDateKey(key) && key >= MIN_DATE_KEY && (!maxKey || key <= maxKey);
-    const rec = keyOk ? normalizeRecord(r) : null;
-    if (!rec) {
-      dropped++;
-      continue;
-    }
-    records[key] = rec;
-    if (lostPart(r, rec)) changed++;
-  }
-  return { records, dropped, changed };
-}
-
-// ----- データの読み書き -----
-// records は { "2026-09-13": { mood, condition, sleeps: [{ start, end }], memo, effort }, ... } の形
-let storageNotice = '';    // 読み込みで見つかった問題（起動時に main.js がお知らせで出す）
-let storageLocked = false; // 壊れたデータを取り分けられなかったとき、上書きしないよう保存を止める
-
-function loadRecords() {
-  let raw;
-  try {
-    raw = localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return {}; // 保存領域そのものが使えない環境
-  }
-  if (raw === null) return {};
-
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    data = undefined;
-  }
-  const result = normalizeRecords(data);
-  if (result && result.dropped === 0 && result.changed === 0) {
-    storageLocked = false;
-    return result.records;
-  }
-
-  // 壊れている・直せない記録が混ざっている。元の文字列を別のキーに取り分けてから、
-  // 読めた分だけで保存し直す。こうすると、次に保存しても元のデータは消えない
-  const records = result ? result.records : {};
-  try {
-    localStorage.setItem(BROKEN_KEY_PREFIX + Date.now(), raw);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    storageLocked = false; // 空きができて取り分けられたら、保存を再開する
-    storageNotice = `${brokenReason(result)}ため、元のデータを取り分けました（設定画面）`;
-  } catch {
-    storageLocked = true;
-    storageNotice = '保存データを読み込めません。上書きしないよう保存を止めています（設定画面）';
-  }
-  return records;
-}
-
-// 「読めない記録が2件、一部が読めない記録が1件あった」のような、取り分けた理由
-function brokenReason(result) {
-  if (!result) return '保存データが壊れていた';
-  const parts = [];
-  if (result.dropped) parts.push(`読めない記録が${result.dropped}件`);
-  if (result.changed) parts.push(`一部が読めない記録が${result.changed}件`);
-  return `${parts.join('、')}あった`;
-}
-
-// 保存データの元の文字列（保存を止めているときに、そのまま書き出す用）
-function readRawRecords() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-// localStorage に書く。空き容量不足などで書けなければ false
-function writeStorage(key, value) {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// このアプリのデータをすべて消す。消せずに残ったキーの数を返す
-function removeAllData() {
-  let keys = [];
-  try {
-    keys = Object.keys(localStorage).filter((k) => k.startsWith(KEY_PREFIX));
-  } catch {
-    return 0;
-  }
-  for (const key of keys) {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // 消せないものは残る（呼び出し元で件数を知らせる）
-    }
-  }
-  storageLocked = false;
-  storageNotice = '';
-  try {
-    return Object.keys(localStorage).filter((k) => k.startsWith(KEY_PREFIX)).length;
-  } catch {
-    return 0;
-  }
-}
-
-function saveRecords(records) {
-  if (storageLocked) return false;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// 保存に失敗したときに画面に出す文
-function saveErrorMessage() {
-  return storageLocked
-    ? '保存データを読み込めないため、上書きしないよう保存を止めています'
-    : '保存できませんでした。端末の保存領域がいっぱいの可能性があります';
-}
-
-// 取り分けた壊れたデータのキー（古い順）
-function listBrokenKeys() {
-  try {
-    return Object.keys(localStorage).filter((k) => k.startsWith(BROKEN_KEY_PREFIX)).sort();
-  } catch {
-    return [];
-  }
 }
 
 // ----- 日付・時刻 -----
@@ -242,6 +73,11 @@ function fromDateKey(key) {
 // "YYYY-MM-DD" の形で、実在する日付か（"2026-02-30" などは不可）
 function isDateKey(key) {
   return /^\d{4}-\d{2}-\d{2}$/.test(key) && toDateKey(fromDateKey(key)) === key;
+}
+
+// 記録できる日か（2000年1月1日〜今日の、実在する日）
+function isRecordableDate(key) {
+  return isDateKey(key) && key >= MIN_DATE_KEY && key <= toDateKey(new Date());
 }
 
 // 日付キーを delta 日ずらす。new Date は日のはみ出し（0日や32日）を前月・翌月に直してくれる
@@ -334,6 +170,13 @@ function formatHours(h) {
 }
 
 // ----- その他 -----
+// 文字列を max 単位（UTF-16）までに切る。絵文字など2単位で1文字のもの（サロゲートペア）を途中で割らない
+function truncateText(str, max) {
+  if (str.length <= max) return str;
+  const last = str.charCodeAt(max - 1);
+  return str.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
 // 数値の平均。空なら null
 function average(nums) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;

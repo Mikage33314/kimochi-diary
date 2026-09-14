@@ -23,6 +23,21 @@
     <!-- ===== 記録 ===== -->
     <!-- tabindex="-1"：JS からフォーカスを移せるようにする（別の画面から移ってきたときなど） -->
     <section class="view" data-view="record" tabindex="-1" aria-label="記録">
+      <!-- iPhone でホーム画面版でないときだけ出す（main.js）。Safari 版と、LINE などアプリの中のブラウザで文を分ける -->
+      <aside class="install-guide" id="install-guide" aria-label="使い方の案内" hidden>
+        <div data-guide="safari" hidden>
+          <p class="guide-title">ホーム画面に追加して使ってね</p>
+          <p>Safari の共有ボタン（<span class="nowrap">□に↑</span>）から「ホーム画面に追加」を選びます。追加するときに、名前を変えることもできます（のぞき見対策）。</p>
+          <p>記録はこの端末の中だけに保存されます。ここ（Safari）で付けた記録は、ホーム画面版には移りません。</p>
+        </div>
+        <div data-guide="in-app" hidden>
+          <p class="guide-title">Safari で開いてね</p>
+          <p>LINE などのアプリの中では、ホーム画面に追加できず、記録が消えることもあります。メニューの「Safari で開く」（「ブラウザで開く」）から開き直してください。</p>
+          <p>記録はこの端末の中だけに保存されます。</p>
+        </div>
+        <button type="button" class="guide-close" id="guide-close" aria-label="案内を閉じる">✕</button>
+      </aside>
+
       <!-- 今日を表示中で、昨日が未記録のときだけ出す -->
       <button type="button" class="nudge" id="yesterday-nudge" hidden>
         <span class="nudge-text"></span><span aria-hidden="true">›</span>
@@ -101,6 +116,7 @@
       <div class="segmented" id="period" role="group" aria-label="表示期間">
         <button type="button" data-mode="week" aria-pressed="true">直近7日</button>
         <button type="button" data-mode="month" aria-pressed="false">月ごと</button>
+        <button type="button" data-mode="year" aria-pressed="false">年ごと</button>
       </div>
       <div class="month-nav" id="graph-month-nav" hidden>
         <button type="button" class="icon-btn" id="graph-prev" aria-label="前の月">‹</button>
@@ -112,22 +128,38 @@
 
       <div class="card">
         <div class="chart-head">
-          <h2 class="chart-title">気分・体調</h2>
+          <h2 class="chart-title" id="chart-mood-title">気分・体調</h2>
           <div class="chart-legend">
             <span class="key key-mood">気分</span>
             <span class="key key-condition">体調</span>
           </div>
         </div>
         <svg class="chart" id="chart-mood" viewBox="0 0 360 200" role="img" aria-label="気分と体調の推移"></svg>
+        <!-- 年ごとの表示で、記録が少ない月（白抜きの点・淡い棒）があるときだけ出す -->
+        <p class="chart-note" id="chart-note" hidden></p>
       </div>
 
       <div class="card">
         <div class="chart-head">
           <h2 class="chart-title">睡眠時間</h2>
-          <div class="chart-legend"><span class="key key-sleep">1日の合計</span></div>
+          <div class="chart-legend"><span class="key key-sleep" id="sleep-key">1日の合計</span></div>
         </div>
         <svg class="chart" id="chart-sleep" viewBox="0 0 360 170" role="img" aria-label="睡眠時間の推移"></svg>
       </div>
+
+      <!-- 年ごとの表示のときだけ出す。たたんでおき、開くと各月の記録日数と月平均が見られる -->
+      <details class="card year-table" id="year-table" hidden>
+        <summary>月ごとの記録日数と平均</summary>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th scope="col">月</th><th scope="col">記録</th><th scope="col">気分</th><th scope="col">体調</th><th scope="col">睡眠</th></tr>
+            </thead>
+            <tbody id="year-table-body"></tbody>
+          </table>
+        </div>
+        <p class="chart-note" id="year-table-note"></p>
+      </details>
     </section>
 
     <!-- ===== 設定 ===== -->
@@ -136,6 +168,7 @@
         <h2 class="section-title">バックアップ</h2>
         <p class="section-note">記録はこの端末の中だけに保存されています。機種変更やアプリの削除に備えて、ときどき書き出しておくと安心です。</p>
         <p class="section-note">書き出したファイルは「ファイル」アプリに保存してください。LINE やメールで送ると、ほかの人に中身を見られるおそれがあります。</p>
+        <p class="section-note">ホーム画面のアイコンを削除すると、記録も消えます。アプリの更新は自動で届くので、追加し直す必要はありません。</p>
         <p class="backup-info" id="backup-info"></p>
         <div class="settings-actions">
           <button type="button" class="save-btn" id="export-btn">書き出す</button>
@@ -228,8 +261,9 @@
     </li>
   </template>
 
-  <!-- 読み込み順が大事：common（共通部品）→ toast（お知らせ）→ 各画面 → main（起動） -->
+  <!-- 読み込み順が大事：common（共通部品）→ storage（保存）→ toast（お知らせ）→ 各画面 → main（起動） -->
   <script src="js/common.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/toast.js"></script>
   <script src="js/record.js"></script>
   <script src="js/calendar.js"></script>

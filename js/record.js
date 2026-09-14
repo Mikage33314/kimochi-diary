@@ -1,4 +1,5 @@
 // ===== 記録画面：入力フォーム =====
+// 保存・書きかけの退避は storage.js の関数を使う（ここでは localStorage に直接触らない）
 const recordForm = document.getElementById('record-form');
 const dateInput = document.getElementById('date');
 const dateHintEl = document.getElementById('date-hint');
@@ -22,6 +23,7 @@ let lastSeenToday = toDateKey(new Date());  // 日付が変わったかの判定
 let formDirty = false;                      // 保存していない入力があるか
 let prevSleeps = null;                      // 「前回と同じ」で入れる睡眠
 
+// ----- 5段階ボタン -----
 // 定義配列から5段階のラジオボタンを作る
 function buildScale(container, name, options) {
   for (const opt of options) {
@@ -50,11 +52,19 @@ function readSleepRow(row) {
 }
 
 // <template> の中身を複製して1行追加する
-function addSleepRow(sleep = { start: '', end: '' }) {
+function appendSleepRow(sleep = { start: '', end: '' }) {
   const row = sleepTemplate.content.firstElementChild.cloneNode(true);
   row.querySelector('.sleep-start').value = sleep.start;
   row.querySelector('.sleep-end').value = sleep.end;
   sleepList.appendChild(row);
+}
+
+// 睡眠の行をまとめて入れ替える。0件なら空の1行から始める
+function setSleepRows(sleeps) {
+  sleepList.replaceChildren();
+  if (sleeps.length === 0) appendSleepRow();
+  for (const s of sleeps) appendSleepRow(s);
+  updateSleepList();
 }
 
 // 各行の睡眠時間と合計を表示し直す。＋ボタンは上限に達したら隠す
@@ -74,20 +84,14 @@ function updateSleepList() {
   addSleepBtn.hidden = sleepList.children.length >= MAX_SLEEPS;
 }
 
-// 表示中の日より前で、睡眠を記録した一番新しい日（無ければ null）。
+// 「前回（9/12）と同じ 23:00〜07:00」。表示中の日より前で、睡眠を記録した一番新しい日の時刻を入れる。
 // "YYYY-MM-DD" は文字列のまま大小を比べられる
-function findPrevSleepKey(dateKey) {
-  const records = loadRecords();
-  return Object.keys(records)
-    .filter((k) => k < dateKey && records[k].sleeps.length > 0)
+function updateSameSleepBtn(records) {
+  const key = Object.keys(records)
+    .filter((k) => k < currentKey && records[k].sleeps.length > 0)
     .sort()
-    .pop() ?? null;
-}
-
-// 「前回（9/12）と同じ 23:00〜07:00」。どの日の時刻かを日付で示す
-function updateSameSleepBtn() {
-  const key = findPrevSleepKey(currentKey);
-  prevSleeps = key ? loadRecords()[key].sleeps : null;
+    .pop();
+  prevSleeps = key ? records[key].sleeps : null;
   sameSleepBtn.hidden = !prevSleeps;
   if (!prevSleeps) return;
   const d = fromDateKey(key);
@@ -114,26 +118,25 @@ sleepList.addEventListener('click', (e) => {
 
 addSleepBtn.addEventListener('click', () => {
   if (sleepList.children.length >= MAX_SLEEPS) return;
-  addSleepRow();
+  appendSleepRow();
   updateSleepList();
 });
 
 sameSleepBtn.addEventListener('click', () => {
-  sleepList.replaceChildren();
-  for (const s of prevSleeps) addSleepRow(s);
-  updateSleepList();
+  setSleepRows(prevSleeps);
   markDirty();
 });
 
 // ----- 日付 -----
 // 日付欄の横の「今日の記録／昨日の記録」と、「昨日の分もつける？」を更新する
-function updateDateInfo() {
+function updateDateInfo(records) {
   const today = toDateKey(new Date());
   const yesterday = shiftDateKey(today, -1);
   dateHintEl.textContent = currentKey === today ? '今日の記録' : currentKey === yesterday ? '昨日の記録' : '';
 
-  // 今日を表示中で、昨日がまだ記録されていないときだけ出す（責めない言い方で）
-  const showNudge = currentKey === today && !loadRecords()[yesterday];
+  // 今日を表示中で、昨日がまだ記録されていないときだけ出す（責めない言い方で）。
+  // 記録が1件もない初回は出さない（始めたばかりの人に、いきなり昨日のことを聞かない）
+  const showNudge = currentKey === today && !records[yesterday] && Object.keys(records).length > 0;
   nudgeBtn.hidden = !showNudge;
   const y = fromDateKey(yesterday);
   nudgeBtn.querySelector('.nudge-text').textContent = showNudge ? `昨日（${y.getMonth() + 1}/${y.getDate()}）の分もつける？` : '';
@@ -149,21 +152,33 @@ function focusRecordView() {
   recordViewEl.focus({ preventScroll: true });
 }
 
+// PC では年を1桁打つたびに change が来る（"0002-09-14" など）。
+// 記録できない値のあいだは何もせず、打ち終わるのを待つ。値も戻さない（戻すと続きを打てない）
+dateInput.addEventListener('change', () => {
+  const key = dateInput.value;
+  if (!isRecordableDate(key) || key === currentKey) return;
+  if (!confirmDiscard()) {
+    dateInput.value = currentKey; // 書きかけを捨てないと決めたときは、元の日付に戻す
+    return;
+  }
+  fillForm(key);
+});
+
+// 欄を離れたときに記録できない値のままなら、表示中の日付に戻す
+dateInput.addEventListener('blur', () => {
+  if (!isRecordableDate(dateInput.value)) dateInput.value = currentKey;
+});
+
 // ----- フォーム全体 -----
 // 指定日の記録をフォームに反映（記録が無ければ空にする）
 function fillForm(dateKey) {
+  const records = loadRecords();
+  const r = records[dateKey];
   currentKey = dateKey;
   dateInput.value = dateKey;
-  const r = loadRecords()[dateKey];
   setRadio('mood', r?.mood);
   setRadio('condition', r?.condition);
-
-  sleepList.replaceChildren();
-  const sleeps = r?.sleeps ?? [];
-  if (sleeps.length === 0) addSleepRow(); // 睡眠が未登録なら空の1行から始める
-  for (const s of sleeps) addSleepRow(s);
-  updateSleepList();
-
+  setSleepRows(r?.sleeps ?? []);
   memoInput.value = r?.memo ?? '';
   effortInput.value = r?.effort ?? '';
   deleteBtn.hidden = !r;
@@ -172,8 +187,8 @@ function fillForm(dateKey) {
   recordStatusEl.textContent = '';
   formDirty = false;
   clearDraft(); // フォームを入れ替えたら、前の書きかけは要らない
-  updateSameSleepBtn();
-  updateDateInfo();
+  updateSameSleepBtn(records);
+  updateDateInfo(records);
 }
 
 // 保存していない入力があれば、捨ててよいか確かめる
@@ -188,57 +203,24 @@ function draftDiscardNote() {
 
 // ----- 書きかけの退避 -----
 // iPhone は、裏に回したアプリを予告なく終了させることがある。
-// 入力のたびに書きかけを localStorage に退避し、次に開いたときに戻す
+// 入力のたびに書きかけを退避し（storage.js の saveDraft）、次に開いたときに戻す
 function markDirty() {
   formDirty = true;
-  const draft = {
+  saveDraft({
     date: currentKey,
     mood: toScore(recordForm.elements.mood.value),
     condition: toScore(recordForm.elements.condition.value),
     sleeps: [...sleepList.children].map(readSleepRow),
     memo: memoInput.value,
     effort: effortInput.value,
-  };
-  writeStorage(DRAFT_KEY, JSON.stringify(draft)); // 書けなくても入力は続けられる
-}
-
-function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {
-    // 消せなくても、次の入力で上書きされる
-  }
-}
-
-// 退避した書きかけを読む。無い・形が崩れている・選べない日付なら null
-function loadDraft() {
-  let d;
-  try {
-    d = JSON.parse(localStorage.getItem(DRAFT_KEY));
-  } catch {
-    return null;
-  }
-  if (!d || typeof d !== 'object' || !isSelectableDate(d.date)) return null;
-  const toTime = (v) => (TIME_PATTERN.test(v) ? v : '');
-  return {
-    date: d.date,
-    mood: toScore(d.mood),
-    condition: toScore(d.condition),
-    sleeps: (Array.isArray(d.sleeps) ? d.sleeps : []).slice(0, MAX_SLEEPS)
-      .map((s) => ({ start: toTime(s?.start), end: toTime(s?.end) })),
-    memo: typeof d.memo === 'string' ? d.memo.slice(0, 100) : '',
-    effort: typeof d.effort === 'string' ? d.effort.slice(0, 200) : '',
-  };
+  });
 }
 
 // 書きかけをフォームに戻す（fillForm でその日を開いたあとに呼ぶ）
 function restoreDraft(d) {
   setRadio('mood', d.mood);
   setRadio('condition', d.condition);
-  sleepList.replaceChildren();
-  if (d.sleeps.length === 0) addSleepRow();
-  for (const s of d.sleeps) addSleepRow(s);
-  updateSleepList();
+  setSleepRows(d.sleeps);
   memoInput.value = d.memo;
   effortInput.value = d.effort;
   markDirty(); // fillForm で消えた退避を書き直す
@@ -283,17 +265,20 @@ function refreshToday() {
     }
     if (wasOnDefault) showToast({ icon: '📅', text: `日付が変わりました（今日は${formatDateJa(today)}）` });
   }
-  updateDateInfo();
+  updateDateInfo(loadRecords());
   return dayChanged;
 }
 
-// 何か入力・選択したら「保存していない入力あり」にする（日付欄の変更は除く）
+// 何か入力・選択したら「保存していない入力あり」にする（日付欄の変更は除く）。
+// 時刻欄などは、環境によって input を出さず change だけのことがあるので、両方で受ける。
 // エラーなどの一言は、次に何か入力したら消す（直した後もエラーが残らないように）
-recordForm.addEventListener('input', (e) => {
-  if (e.target === dateInput) return;
-  markDirty();
-  recordStatusEl.textContent = '';
-});
+for (const type of ['input', 'change']) {
+  recordForm.addEventListener(type, (e) => {
+    if (e.target === dateInput) return;
+    markDirty();
+    recordStatusEl.textContent = '';
+  });
+}
 
 // 入力欄にフォーカスしたとき、画面下に貼りついた保存ボタンの帯に隠れていたら、見える位置までスクロールする。
 // ブラウザ自身のスクロールが済んでから確かめるため、次の描画のタイミングで行う
@@ -304,28 +289,6 @@ recordForm.addEventListener('focusin', (e) => {
       e.target.scrollIntoView({ block: 'center' });
     }
   });
-});
-
-// 日付欄で選べる日か（2000年1月1日〜今日の、実在する日）
-function isSelectableDate(key) {
-  return isDateKey(key) && key >= MIN_DATE_KEY && key <= toDateKey(new Date());
-}
-
-// PC では年を1桁打つたびに change が来る（"0002-09-14" など）。
-// 選べない値のあいだは何もせず、打ち終わるのを待つ。値も戻さない（戻すと続きを打てない）
-dateInput.addEventListener('change', () => {
-  const key = dateInput.value;
-  if (!isSelectableDate(key) || key === currentKey) return;
-  if (!confirmDiscard()) {
-    dateInput.value = currentKey; // 書きかけを捨てないと決めたときは、元の日付に戻す
-    return;
-  }
-  fillForm(key);
-});
-
-// 欄を離れたときに選べない値のままなら、表示中の日付に戻す
-dateInput.addEventListener('blur', () => {
-  if (!isSelectableDate(dateInput.value)) dateInput.value = currentKey;
 });
 
 // メモ欄で改行キーを押すと、フォームが送信（保存）されてしまうので止める。
@@ -343,14 +306,13 @@ function showFieldError(message, focusEl) {
   focusEl.focus({ preventScroll: true });
 }
 
-recordForm.addEventListener('submit', (e) => {
-  e.preventDefault(); // フォーム送信によるページ再読み込みを止める
-
-  const mood = Number(recordForm.elements.mood.value);
-  const condition = Number(recordForm.elements.condition.value);
+// 入力を検査して、保存する形にする。問題があればエラーを出して null
+function readForm() {
+  const mood = toScore(recordForm.elements.mood.value);
+  const condition = toScore(recordForm.elements.condition.value);
   if (!mood || !condition) {
     showFieldError('気分と体調を選んでください', recordForm.elements[mood ? 'condition' : 'mood'][0]);
-    return;
+    return null;
   }
 
   // 両方空の行は「未入力」として捨てる。片方だけ・同じ時刻の行があれば、その欄へ案内する
@@ -361,41 +323,69 @@ recordForm.addEventListener('submit', (e) => {
     if (!isValidSleep(s)) {
       showFieldError('睡眠は寝た時刻と起きた時刻の両方を入れてください（同じ時刻は不可）',
         row.querySelector(s.start === '' ? '.sleep-start' : '.sleep-end'));
-      return;
+      return null;
     }
     sleeps.push(s);
   }
 
+  // 文字数は保存データの検査と同じ数え方で確かめる（古い Safari は入力欄の上限を別の数え方で守るため）
+  const memo = memoInput.value.trim();
+  const effort = effortInput.value.trim();
+  if (memo.length > MEMO_MAX) {
+    showFieldError(`ひとことメモは${MEMO_MAX}文字までです（絵文字は2文字と数えます）`, memoInput);
+    return null;
+  }
+  if (effort.length > EFFORT_MAX) {
+    showFieldError(`頑張ったことは${EFFORT_MAX}文字までです（絵文字は2文字と数えます）`, effortInput);
+    return null;
+  }
+  return { mood, condition, sleeps, memo, effort };
+}
+
+recordForm.addEventListener('submit', (e) => {
+  e.preventDefault(); // フォーム送信によるページ再読み込みを止める
+  const input = readForm();
+  if (!input) return;
+
   const records = loadRecords();
-  records[currentKey] = {
-    ...records[currentKey], // 画面に無い項目（将来の項目など）は残す
-    mood,
-    condition,
-    sleeps,
-    memo: memoInput.value.trim(),
-    effort: effortInput.value.trim(),
-  };
+  records[currentKey] = { ...records[currentKey], ...input }; // 画面に無い項目（将来の項目など）は残す
   if (!saveRecords(records)) {
     recordStatusEl.textContent = saveErrorMessage();
     return;
   }
   fillForm(currentKey); // 空の睡眠行を片付け、「編集中」の表示にする
-  const cheer = cheerFor(mood, condition); // 気分・体調に合わせた言葉を返す
-  showToast({ icon: cheer.icon, title: `${formatDateJa(currentKey)}を記録しました`, text: cheer.text });
+  const cheer = cheerFor(input.mood, input.condition); // 気分・体調に合わせた言葉を返す
+  showToast({ icon: cheer.icon, title: `${formatDateJa(currentKey)}を記録しました`, text: cheer.text, duration: 4000 });
 });
 
 deleteBtn.addEventListener('click', () => {
   if (!confirm(`${formatDateJa(currentKey)}の記録を削除しますか？`)) return;
 
+  const key = currentKey;
   const records = loadRecords();
-  delete records[currentKey];
+  const deleted = records[key];
+  delete records[key];
   if (!saveRecords(records)) {
     recordStatusEl.textContent = saveErrorMessage();
     return;
   }
-  fillForm(currentKey);
-  showToast({ text: '削除しました' });
+  fillForm(key);
+  // 押し間違い（子どもが触った など）に備えて、5秒ほど「元に戻す」を出す
+  showToast({ text: '削除しました', duration: 5000, action: { label: '元に戻す', onClick: () => undoDelete(key, deleted) } });
 });
+
+// 削除した記録を戻す。その間に同じ日を記録していたら、上書きしない
+function undoDelete(key, record) {
+  const records = loadRecords();
+  if (records[key]) return;
+  records[key] = record;
+  if (!saveRecords(records)) {
+    showToast({ icon: '⚠️', text: saveErrorMessage(), duration: 6000 });
+    return;
+  }
+  if (key === currentKey && !formDirty) fillForm(key);
+  showToast({ icon: '↩️', text: `${formatDateJa(key)}の記録を元に戻しました` });
+}
 
 // ----- 初期化 -----
 buildScale(document.getElementById('mood-scale'), 'mood', MOODS);
