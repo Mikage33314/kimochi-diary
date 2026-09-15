@@ -60,10 +60,13 @@
         </fieldset>
 
         <!-- aria-describedby：時刻の欄へ直接移ったときも、案内（どの夜〜朝か）が読み上げで伝わるように -->
-        <fieldset class="field" aria-describedby="sleep-hint">
+        <fieldset class="field" aria-describedby="sleep-hint-text">
           <legend class="field-label">睡眠</legend>
-          <!-- どの夜〜朝の睡眠を入れるか（睡眠は起きた日の記録に入る）。日付は record.js で入れる -->
-          <p class="sleep-hint" id="sleep-hint"></p>
+          <!-- どの夜〜朝の睡眠を入れるか（睡眠は目が覚めた日の記録に入る）。日付は record.js で入れる。
+               見える案内は語句のかたまりで折り返すよう分けてあり、そのまま読み上げると間に空白が入るので、
+               読み上げには区切りの無い同じ文（#sleep-hint-text）を使う -->
+          <p class="sleep-hint" id="sleep-hint" aria-hidden="true"></p>
+          <p class="sr-only" id="sleep-hint-text"></p>
           <div class="sleep-head" aria-hidden="true">
             <span>寝た時刻</span><span></span><span>起きた時刻</span><span></span>
           </div>

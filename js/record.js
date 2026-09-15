@@ -156,11 +156,13 @@ function updateSleepHint(today) {
   // 夜に寝る人向けの「ゆうべ〜けさ」は例として示し、決まりは「目が覚めた日」で伝える（夜勤の人や、昼にまとめて寝る人もいるため）。
   // 「起きた日」だと「出来事が起きた日」とも読めるので、「目が覚めた日」にする
   const range = currentKey === today ? 'ゆうべ〜けさ' : `${prev}の夜〜${cur}の朝`;
-  // 語句ごとにひとかたまりにし、折り返すときは語句の切れ目で改行する（「入／れます」「睡眠／時間は」のように切れないように）
-  const part = (text) => Object.assign(document.createElement('span'), { className: 'hint-part', textContent: text });
   // 2つ目の睡眠を「昼寝」と決めつけない（夜勤の人や、昼にまとめて寝る人もいるため）
-  sleepHintEl.replaceChildren(part(`${range}など、`), part(`目が覚めた日が${cur}の`), part('睡眠を入れます。'),
-    part('睡眠時間は「＋」で追加できます'));
+  const texts = [`${range}など、`, `目が覚めた日が${cur}の`, '睡眠を入れます。', '睡眠時間は「＋」で追加できます'];
+  // 見える案内は語句ごとにひとかたまりにし、折り返すときは語句の切れ目で改行する（「入／れます」「睡眠／時間は」のように切れないように）
+  const part = (text) => Object.assign(document.createElement('span'), { className: 'hint-part', textContent: text });
+  sleepHintEl.replaceChildren(...texts.map(part));
+  // 読み上げ用には、区切りの無い1つの文として入れる（かたまりのままだと、間に空白を入れて読まれるため）
+  document.getElementById('sleep-hint-text').textContent = texts.join('');
 }
 
 nudgeBtn.addEventListener('click', () => {

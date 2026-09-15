@@ -41,6 +41,9 @@ tabsEl.addEventListener('click', (e) => {
   // 設定を開いているときに「設定」をもう一度押したら、項目の一覧へ戻る
   if (tab.dataset.view === 'settings' && currentView === 'settings') showSettingsPage(null);
   showView(tab.dataset.view);
+  // 前の画面で触っていた所（入力欄・設定のページ名など）は隠れるので、フォーカスは押したタブに置く
+  // （iPhone の Safari などは、ボタンを押してもフォーカスが移らず、隠れた所に残って迷子になるため）
+  tab.focus({ preventScroll: true });
 });
 
 // ----- 更新（Service Worker：sw.js） -----
