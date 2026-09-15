@@ -153,11 +153,14 @@ function updateSleepHint(today) {
   };
   const prev = md(shiftDateKey(currentKey, -1));
   const cur = md(currentKey);
-  const range = currentKey === today ? `ゆうべ（${prev}）〜けさ（${cur}）` : `${prev}の夜〜${cur}の朝`;
-  // 語句ごとにひとかたまりにし、折り返すときは語句の切れ目で改行する（「入／れます」「昼寝／は」のように切れないように）。
-  // 1文目は 320px 幅に1行で収まらないので、「〜けさ（9/14）の」と「睡眠を入れます。」の間で分ける
+  // 夜に寝る人向けの「ゆうべ〜けさ」は例として示し、決まりは「目が覚めた日」で伝える（夜勤の人や、昼にまとめて寝る人もいるため）。
+  // 「起きた日」だと「出来事が起きた日」とも読めるので、「目が覚めた日」にする
+  const range = currentKey === today ? 'ゆうべ〜けさ' : `${prev}の夜〜${cur}の朝`;
+  // 語句ごとにひとかたまりにし、折り返すときは語句の切れ目で改行する（「入／れます」「睡眠／時間は」のように切れないように）
   const part = (text) => Object.assign(document.createElement('span'), { className: 'hint-part', textContent: text });
-  sleepHintEl.replaceChildren(part(`${range}の`), part('睡眠を入れます。'), part('昼寝は「＋」で追加できます'));
+  // 2つ目の睡眠を「昼寝」と決めつけない（夜勤の人や、昼にまとめて寝る人もいるため）
+  sleepHintEl.replaceChildren(part(`${range}など、`), part(`目が覚めた日が${cur}の`), part('睡眠を入れます。'),
+    part('睡眠時間は「＋」で追加できます'));
 }
 
 nudgeBtn.addEventListener('click', () => {
