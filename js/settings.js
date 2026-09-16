@@ -133,7 +133,15 @@ exportBtn.addEventListener('click', async () => {
     settingsStatusEl.textContent = '書き出す記録がまだありません';
     return;
   }
-  const result = await shareOrDownload(`kd-backup-${toDateKey(new Date())}.json`, JSON.stringify(makeBackup(records), null, 2));
+  // 記録の中に深すぎるデータなどがあると、JSON を作れずに例外になる。黙って何も起きないように、理由を出す
+  let text;
+  try {
+    text = JSON.stringify(makeBackup(records), null, 2);
+  } catch {
+    settingsStatusEl.textContent = '記録の中に書き出せない形のデータがあるため、書き出すファイルを作れませんでした';
+    return;
+  }
+  const result = await shareOrDownload(`kd-backup-${toDateKey(new Date())}.json`, text);
   if (result === 'cancelled') return;
   markBackedUp();
   renderSettings();

@@ -427,9 +427,26 @@ function markBackedUp() {
 
 // バックアップのファイルの中身（文字列）を検査する。
 // 読めなければ { error }、読めれば { records, count（記録ありの日数）, dropped, changed, future }
+// 読み込むファイルの入れ子の深さの上限（ファイルの一番外を1段と数える）。記録の形は数段しか使わない。
+// これより深いファイルは読み込まない（深すぎるデータを入れると、書き出しの JSON を作る処理が止まり、以後書き出せなくなるため）
+const MAX_IMPORT_DEPTH = 100;
+
+// 入れ子の深さが limit を超えるか。深いデータで関数の呼び出しがあふれないよう、再帰を使わずに調べる
+function isTooDeep(value, limit) {
+  const stack = [[value, 1]];
+  while (stack.length > 0) {
+    const [v, depth] = stack.pop();
+    if (v === null || typeof v !== 'object') continue;
+    if (depth > limit) return true;
+    for (const child of Object.values(v)) stack.push([child, depth + 1]);
+  }
+  return false;
+}
+
 function parseBackupText(text) {
   const data = parseJson(text);
   if (data === undefined) return { error: 'JSON ファイルとして読めませんでした' };
+  if (isTooDeep(data, MAX_IMPORT_DEPTH)) return { error: 'ファイルの中のデータの入れ子が深すぎるため、読み込めません' };
   // 書き出した形式 { app, version, records } と、記録だけの形式（版1とみなす）の両方を受け付ける
   let source = data;
   if (data?.app === 'kimochi-diary') {
