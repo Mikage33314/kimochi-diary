@@ -23,9 +23,13 @@ const CALENDAR_KIND_KEY = KEY_PREFIX + 'calendar-view';            // カレン�
 // DATA_VERSION：記録の形式の版。書き出すファイルの版（version）も同じ値を使う。
 //   項目を消す・意味を変える・睡眠1件の中に項目を足すときは上げ、MIGRATIONS に「1つ前の版 → その版」の
 //   変換を足す。変換は、二度かけても同じ結果になるように書く（途中で止まってやり直すことがあるため）。
-//   記録そのものに項目を足すだけなら上げない（知らない項目は ...r で残るため）
-const DATA_VERSION = 1;
-const MIGRATIONS = {}; // 例：{ 2: (records) => 版2の形にした records }
+//   記録そのものに項目を足すだけなら上げない（版2からは、知らない項目だけの日も残すため）
+// 版2：記録の項目をすべて任意にした（気分・体調が無い日も正常な記録）。記録の中身は変えない。
+//   版1の画面は、気分・体調が無い日を「読めない記録」として外してしまうため、版を上げて書き戻させない
+const DATA_VERSION = 2;
+const MIGRATIONS = {
+  2: (records) => records,
+};
 
 // ----- 安全な読み書き -----
 // localStorage は、容量不足やプライベートブラウズなどで例外を投げることがある。ここで受け止める
@@ -83,44 +87,39 @@ function copyRecords(records) {
 // localStorage や読み込んだファイルの中身は、形が崩れていることがある（手で編集した・壊れた など）。
 // 画面が使う前に必ずここを通して正しい形に直し、直せない記録は捨てる
 
-// 1日分の記録を正しい形に直す。気分・体調が無い（直せない）記録は null。
-// 知らない項目（将来増える項目など）は、...r で消さずにそのまま残す
+// 1日分の記録を正しい形に直す。入れ物がオブジェクトでなければ null。
+// 知っている項目（RECORD_ITEMS）は項目ごとに検査する（項目どうしは独立していて、どれも任意）
+// - 未入力の項目はキーを置かない（sleeps: [] や memo: '' も置かない）
+// - 異常値の項目はその項目だけ外し、ほかの項目は残す。内容が減ったら lost: true（呼び出し側で元を取り分ける）
+// 知らない項目（将来増える項目など）と管理用の情報は、消さずにそのまま残す
 function normalizeRecord(r) {
-  if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
-  const mood = toScore(r.mood);
-  const condition = toScore(r.condition);
-  if (mood === null || condition === null) return null;
-
-  const sleeps = (Array.isArray(r.sleeps) ? r.sleeps : [])
-    .filter((s) => s && TIME_PATTERN.test(s.start) && TIME_PATTERN.test(s.end) && s.start !== s.end)
-    .slice(0, MAX_SLEEPS)
-    .map((s) => ({ ...s }));
-
-  return {
-    ...r,
-    mood,
-    condition,
-    sleeps,
-    memo: typeof r.memo === 'string' ? truncateText(r.memo, MEMO_MAX) : '',
-    effort: typeof r.effort === 'string' ? truncateText(r.effort, EFFORT_MAX) : '',
-  };
-}
-
-// 直したときに内容が減ったか（捨てた睡眠・切った文字・読めない値がある）。
-// "3" → 3 や、無い memo → '' のように、情報が減らない直し方は含めない
-function lostPart(r, rec) {
-  const sleeps = r.sleeps ?? [];
-  return !Array.isArray(sleeps) || sleeps.length !== rec.sleeps.length
-    || (r.memo != null && r.memo !== rec.memo)
-    || (r.effort != null && r.effort !== rec.effort);
+  if (!isPlainObject(r)) return null;
+  const entries = [];
+  let lost = false;
+  for (const [key, value] of Object.entries(r)) {
+    if (!isRecordItemKey(key)) {
+      entries.push([key, value]);
+      continue;
+    }
+    const result = RECORD_ITEMS[key].normalize(value);
+    if (result.invalid || result.lost) lost = true;
+    if ('value' in result) entries.push([key, result.value]);
+  }
+  // Object.fromEntries で作る。record[key] = value で入れると、"__proto__" という名前の項目は
+  // 項目として入らず（オブジェクトのしくみの方が変わり）、知らない項目が黙って消えるため
+  return { record: Object.fromEntries(entries), lost };
 }
 
 // 記録全体を検査する。入れ物がオブジェクトでなければ null。
 // 日付キーが正しく、中身を直せた記録だけを records に残す。
-// 捨てた件数を dropped、残したが一部が減った件数を changed で返す。
+// - 捨てた件数を dropped（元を取り分ける）、残したが一部が減った件数を changed で返す
+// - キーが1つも残らない日は除く。もとから空（{} や、未入力の項目だけ）なら情報が無いので数えない。
+//   異常値を外して空になったなら dropped に数える
+// - 管理用の情報だけの日・空の知らない項目だけの日は、「記録あり」ではない（hasAnyEntry が false）が、消さずに残す
+//   （将来の同期などで使う情報を壊さないため。画面は hasAnyEntry で判断する）
 // maxKey を渡すと、それより後の日付も除き、その件数を future で返す（ファイルの読み込みで未来の日を弾く）
 function normalizeRecords(data, { maxKey } = {}) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  if (!isPlainObject(data)) return null;
   const records = {};
   let dropped = 0;
   let changed = 0;
@@ -130,13 +129,14 @@ function normalizeRecords(data, { maxKey } = {}) {
       future++;
       continue;
     }
-    const rec = isDateKey(key) && key >= MIN_DATE_KEY ? normalizeRecord(r) : null;
-    if (!rec) {
+    const result = isDateKey(key) && key >= MIN_DATE_KEY ? normalizeRecord(r) : null;
+    if (!result || (result.lost && Object.keys(result.record).length === 0)) {
       dropped++;
       continue;
     }
-    records[key] = rec;
-    if (lostPart(r, rec)) changed++;
+    if (Object.keys(result.record).length === 0) continue;
+    records[key] = result.record;
+    if (result.lost) changed++;
   }
   return { records, dropped, changed, future };
 }
@@ -150,16 +150,18 @@ function migrateRecords(data, from, to = DATA_VERSION, migrations = MIGRATIONS) 
 }
 
 // ----- 記録の読み書き -----
-// records は { "2026-09-13": { mood, condition, sleeps: [{ start, end }], memo, effort }, ... } の形
+// records は { "2026-09-13": { mood, condition, sleeps: [{ start, end }], memo, effort }, ... } の形。
+// 項目はどれも任意で、未入力の項目はキーを置かない（知らない項目・管理用の情報が入っていることもある）
 let storageNotice = '';      // 読み込みで見つかった問題（起動時に main.js がお知らせで出す）
 let storageLocked = false;   // 上書きしないよう保存を止めているか
-let storageLockReason = '';  // 'broken'（壊れていて取り分けられない）／'rewrite'（取り分けたが書き直せない）／'newer'（新しい版の形式）
+let storageLockReason = '';  // 'broken'（壊れていて取り分けられない）／'rewrite'（取り分けたが書き直せない）／'newer'（新しい版の形式）／'upgrade'（形式を新しくする前の控えを取れない）
 let recordsCache = null;     // { raw, version, records }：直近に検査した結果。中身も版も同じなら検査をくり返さない
 
 const LOCK_NOTICES = {
   newer: '新しい版のアプリで保存した記録があります。上書きしないよう保存を止めています。アプリを上にスワイプして閉じてから、開き直してください（アイコンは削除しないでください）',
   broken: '保存データを読み込めません。上書きしないよう保存を止めています（設定の「データの削除」）',
   rewrite: '保存データの一部が読めず、直して保存し直す空きがないため、保存を止めています（設定の「データの削除」）',
+  upgrade: '記録の形式を新しくする前の控えを保存する空きがないため、保存を止めています。記録は消えていません。設定の「バックアップ」の「書き出す」で記録を保存してください',
 };
 
 function lockStorage(reason) {
@@ -198,21 +200,26 @@ function cacheRecords(raw, records) {
   return records;
 }
 
-// 保存データを読んで検査し、必要なら取り分けてから直して保存し直す
-function readRecords(raw) {
+// 保存データを読んで検査し、必要なら取り分けてから直して保存し直す。
+// 版が変わったときの読み直しは1回だけ（canRetry）。書いた版を読み返せない・読むたびに版が変わる保存領域でも、
+// 読み直しが終わらずに止まる（起動できなくなる）ことがないように、2回目は読むだけにして保存を止める
+function readRecords(raw, canRetry = true) {
   const version = storedDataVersion();
   if (version > DATA_VERSION) {
     lockStorage('newer'); // 読むだけ。直しも保存もしない
     return normalizeRecords(parseJson(raw))?.records ?? {};
   }
-  if (version < DATA_VERSION) {
-    // 変換できたら読み直す。できなければ保存を止めたまま、元の記録を読むだけにして見せる
-    if (upgradeData(raw, version)) return readRecords(readItem(STORAGE_KEY));
-    return normalizeRecords(parseJson(raw))?.records ?? {};
-  }
+  // 記録が無ければ、変換も版の書き込みもしない（すべて削除の直後に、版だけが残らないように。版は最初の保存で書く）
   if (raw === null) {
     unlockStorage();
     return cacheRecords(null, {});
+  }
+  if (version < DATA_VERSION) {
+    // 変換できたら読み直す。できなければ保存を止めたまま、元の記録を読むだけにして見せる。
+    // 読み直しでもまだ古い版なら、書いた版が残っていない。変換をくり返さずに止める
+    if (!canRetry) lockStorage('broken');
+    else if (upgradeData(raw, version)) return readRecords(readItem(STORAGE_KEY), false);
+    return normalizeRecords(parseJson(raw))?.records ?? {};
   }
 
   const result = normalizeRecords(parseJson(raw));
@@ -225,6 +232,12 @@ function readRecords(raw) {
   // 壊れている・直せない記録が混ざっている。元の文字列を別のキーに取り分けてから、
   // 読めた分だけで保存し直す。こうすると、次に保存しても元のデータは消えない。
   // 同じ中身をすでに取り分けてあれば、もう一度は取り分けない（開き直すたびに増えないように）
+  // 書き直す直前にも版を確かめる。読んでから書くまでの間に、別に開いた新しい版のアプリが形式を変えていたら、読み直す
+  if (storedDataVersion() !== version) {
+    if (canRetry) return readRecords(readItem(STORAGE_KEY), false);
+    lockStorage('broken'); // 読み直しても版が変わる。書き直さずに止める
+    return records;
+  }
   if (!isStashed(raw) && !writeItem(BROKEN_KEY_PREFIX + Date.now(), raw)) {
     lockStorage('broken');
     return records;
@@ -249,33 +262,39 @@ function brokenReason(result) {
 }
 
 // 古い版の形式の記録を、版 to の形式に変換する。成功したら true。失敗したら保存を止めて false。
-// - 変換の前に元の文字列を取っておく。すでに取ってあれば上書きしない（途中で止まってやり直したときに、
-//   変換済みの値で元を上書きしないため）
-// - 版を書けなかったら、記録を元の文字列に戻す（次に読んだときに二重に変換しないため）
+// 何度やり直しても記録を壊さないように、次の順で行う
+// 1. 変換の前に、元の文字列を取っておく。取っておけなければ、記録にも版にも触らずに止める（'upgrade'）。
+//    すでに取ってあれば上書きしない（途中で止まってやり直したときに、変換済みの値で元を上書きしないため）
+// 2. 変換する。中身が変わらなければ記録は書き直さない（書き直しの途中で止まる機会を作らない）
+// 3. 版を書く。書けなかったら、記録を元の文字列に戻す（次に読んだときに二重に変換しないため）
 function upgradeData(raw, from, to = DATA_VERSION, migrations = MIGRATIONS) {
-  const failed = () => {
-    lockStorage('broken');
+  const failed = (reason) => {
+    lockStorage(reason);
     return false;
   };
+  if (raw !== null) {
+    const keepKey = BEFORE_UPGRADE_KEY_PREFIX + from;
+    if (readItem(keepKey) === null && !writeItem(keepKey, raw)) return failed('upgrade');
+  }
   const data = parseJson(raw);
   if (data && typeof data === 'object') {
-    const keepKey = BEFORE_UPGRADE_KEY_PREFIX + from;
-    if (readItem(keepKey) === null && !writeItem(keepKey, raw)) return failed();
     let converted;
     try {
       converted = migrateRecords(data, from, to, migrations);
     } catch {
-      return failed();
+      return failed('broken');
     }
-    if (!writeItem(STORAGE_KEY, JSON.stringify(converted))) return failed();
+    const text = JSON.stringify(converted);
+    const rewrite = text !== JSON.stringify(data);
+    if (rewrite && !writeItem(STORAGE_KEY, text)) return failed('broken');
     if (!writeItem(DATA_VERSION_KEY, String(to))) {
-      writeItem(STORAGE_KEY, raw);
-      return failed();
+      if (rewrite) writeItem(STORAGE_KEY, raw);
+      return failed('broken');
     }
     return true;
   }
   // 記録が無い・壊れている場合は変換できないので、版だけ上げる（壊れた分は通常の検査で取り分ける）
-  return writeItem(DATA_VERSION_KEY, String(to)) || failed();
+  return writeItem(DATA_VERSION_KEY, String(to)) || failed('broken');
 }
 
 function saveRecords(records) {
@@ -283,8 +302,10 @@ function saveRecords(records) {
   if (storedDataVersion() > DATA_VERSION) lockStorage('newer');
   if (storageLocked) return false;
   const raw = JSON.stringify(records);
+  // 版は記録より先に書く（記録だけ新しい形式で、版が古いままになると、古い版の画面が書き戻してしまうため）。
+  // 版が古いのは、記録が無い状態（すべて削除の後など）から保存するとき。古い形式の記録があれば読み込み時に変換済み
+  if (storedDataVersion() < DATA_VERSION && !writeItem(DATA_VERSION_KEY, String(DATA_VERSION))) return false;
   if (!writeItem(STORAGE_KEY, raw)) return false;
-  if (readItem(DATA_VERSION_KEY) === null) writeItem(DATA_VERSION_KEY, String(DATA_VERSION));
   // 控えは必ず検査済みの値にする。検査で変わる値だったら控えを捨て、次に読むときに検査する
   const checked = normalizeRecords(records);
   if (checked && checked.dropped === 0 && checked.changed === 0) cacheRecords(raw, checked.records);
@@ -294,7 +315,7 @@ function saveRecords(records) {
 
 // 保存に失敗したときに画面に出す文
 function saveErrorMessage() {
-  if (storageLockReason === 'newer') return LOCK_NOTICES.newer;
+  if (storageLockReason === 'newer' || storageLockReason === 'upgrade') return LOCK_NOTICES[storageLockReason];
   if (storageLocked) return '保存データを読み込めないため、上書きしないよう保存を止めています（設定の「データの削除」）';
   return '保存できませんでした。端末の保存領域がいっぱいの可能性があります';
 }
@@ -328,7 +349,12 @@ function removeBrokenData() {
 
 // このアプリのデータをすべて消す。消せずに残ったキーの数を返す
 function removeAllData() {
-  for (const key of listKeys(KEY_PREFIX)) removeItem(key);
+  for (const key of listKeys(KEY_PREFIX)) {
+    if (key !== DATA_VERSION_KEY) removeItem(key);
+  }
+  // 形式の版は、記録を消せたときだけ消す（版2の記録が版なしで残ると、開いたままの版1の画面が
+  // 古い形式として検査し、気分の無い日などを「読めない記録」として外して書き直してしまうため）
+  if (readItem(STORAGE_KEY) === null) removeItem(DATA_VERSION_KEY);
   unlockStorage();
   storageNotice = '';
   recordsCache = null;
@@ -400,7 +426,7 @@ function markBackedUp() {
 }
 
 // バックアップのファイルの中身（文字列）を検査する。
-// 読めなければ { error }、読めれば { records, count, dropped, changed, future }
+// 読めなければ { error }、読めれば { records, count（記録ありの日数）, dropped, changed, future }
 function parseBackupText(text) {
   const data = parseJson(text);
   if (data === undefined) return { error: 'JSON ファイルとして読めませんでした' };
@@ -411,9 +437,11 @@ function parseBackupText(text) {
     if (converted.error) return converted;
     source = converted.records;
   }
-  // 中身は、起動時の読み込みと同じ normalizeRecords() で検査する。今日より後の日付は除く
+  // 中身は、起動時の読み込みと同じ normalizeRecords() で検査する。今日より後の日付は除く。
+  // 件数は「記録あり」の日だけを数える（管理用の情報だけの日などは、入れはするが記録として数えない。
+  // 数えると、記録の無いファイルで今の記録をまるごと置き換えてしまうため）
   const result = normalizeRecords(source, { maxKey: toDateKey(new Date()) });
-  const count = result ? Object.keys(result.records).length : 0;
+  const count = result ? Object.values(result.records).filter(hasAnyEntry).length : 0;
   if (count === 0) return { error: 'このアプリの記録が見つかりませんでした' };
   return { ...result, count };
 }
@@ -421,9 +449,11 @@ function parseBackupText(text) {
 // 記録をまるごと置き換える（ファイルの読み込み）。置き換える前の記録を取っておく（元に戻す用。直前の1回分）。
 // 結果は 'ok'／'no-space'（取っておけなかった）／'failed'（保存できなかった）
 function replaceRecords(records) {
+  const previous = readItem(BEFORE_IMPORT_KEY); // 前の読み込みで取っておいた記録（まだ元に戻せる）
   if (!writeItem(BEFORE_IMPORT_KEY, JSON.stringify(makeBackup(loadRecords())))) return 'no-space';
   if (!saveRecords(records)) {
-    removeItem(BEFORE_IMPORT_KEY); // 置き換えていないので、取っておく必要もない
+    // 置き換えていないので、今回取っておいた分は要らない。前の読み込みの「元に戻す」は、消さずに前の中身へ戻す
+    if (previous === null || !writeItem(BEFORE_IMPORT_KEY, previous)) removeItem(BEFORE_IMPORT_KEY);
     return 'failed';
   }
   return 'ok';

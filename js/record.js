@@ -89,10 +89,10 @@ function updateSleepList() {
 // "YYYY-MM-DD" は文字列のまま大小を比べられる
 function updateSameSleepBtn(records) {
   const key = Object.keys(records)
-    .filter((k) => k < currentKey && records[k].sleeps.length > 0)
+    .filter((k) => k < currentKey && recordSleeps(records[k]).length > 0)
     .sort()
     .pop();
-  prevSleeps = key ? records[key].sleeps : null;
+  prevSleeps = key ? recordSleeps(records[key]) : null;
   sameSleepBtn.hidden = !prevSleeps;
   if (!prevSleeps) return;
   const d = fromDateKey(key);
@@ -414,7 +414,10 @@ recordForm.addEventListener('submit', (e) => {
   if (!input) return;
 
   const records = loadRecords();
-  records[currentKey] = { ...records[currentKey], ...input }; // 画面に無い項目（将来の項目など）は残す
+  // 入れ替えるのは記録画面に出している項目だけ。画面に無い項目（将来の項目など）は残し、空にした項目は消す
+  const next = applyRecordEdit(records[currentKey], input, RECORD_ITEM_KEYS);
+  if (next) records[currentKey] = next;
+  else delete records[currentKey];
   if (!saveRecords(records)) {
     recordStatusEl.textContent = saveErrorMessage();
     return;

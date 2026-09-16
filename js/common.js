@@ -54,6 +54,115 @@ function toScore(v) {
   return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
 }
 
+// ----- 記録の項目（1日分の記録の中身） -----
+// 記録の項目はすべて独立した任意の項目。特定の項目どうしが同時にあることを前提にしない。
+// RECORD_ITEMS は、この版のアプリが知っている項目の表。項目を足すときは、ここに1つ足す。
+// normalize(value) の結果は次のどれか（保存データの検査・編集の反映・「記録あり」の判定で共通に使う）
+// - { value }：正常な値（直した値のこともある）。lost: true なら、直すときに内容が減った（元を取り分ける）
+// - { empty: true }：未入力（正常）。キーを置かない
+// - { invalid: true }：仕様上ありえない値（異常値）。その項目だけ外し、元を取り分ける
+const scoreItem = {
+  normalize(v) {
+    if (v == null) return { empty: true };
+    const n = toScore(v);
+    return n === null ? { invalid: true } : { value: n };
+  },
+  equals: (a, b) => (a ?? null) === (b ?? null),
+};
+
+const sleepsItem = {
+  normalize(v) {
+    if (v == null) return { empty: true };
+    if (!Array.isArray(v)) return { invalid: true };
+    // 時刻は文字だけを認める（["23:00"] のような配列も、そのままだと正規表現の検査を通ってしまうため）
+    const isTime = (t) => typeof t === 'string' && TIME_PATTERN.test(t);
+    const kept = v
+      .filter((s) => s && isTime(s.start) && isTime(s.end) && s.start !== s.end)
+      .slice(0, MAX_SLEEPS)
+      .map((s) => ({ ...s }));
+    const lost = kept.length !== v.length;
+    if (kept.length === 0) return lost ? { invalid: true } : { empty: true };
+    return lost ? { value: kept, lost } : { value: kept };
+  },
+  equals: (a, b) => {
+    const x = a ?? [];
+    const y = b ?? [];
+    return x.length === y.length && x.every((s, i) => s.start === y[i].start && s.end === y[i].end);
+  },
+};
+
+// メモ・頑張ったこと。空白だけの文字は未入力とみなす
+const textItem = (max) => ({
+  normalize(v) {
+    if (v == null) return { empty: true };
+    if (typeof v !== 'string') return { invalid: true };
+    if (v.trim() === '') return { empty: true };
+    const text = truncateText(v, max);
+    return text === v ? { value: v } : { value: text, lost: true };
+  },
+  equals: (a, b) => (a ?? '') === (b ?? ''),
+});
+
+const RECORD_ITEMS = {
+  mood: scoreItem,
+  condition: scoreItem,
+  sleeps: sleepsItem,
+  memo: textItem(MEMO_MAX),
+  effort: textItem(EFFORT_MAX),
+};
+const RECORD_ITEM_KEYS = Object.keys(RECORD_ITEMS);
+
+// 管理用の情報。これだけがある日を「記録あり」と数えない（今の版は書き込まない）
+const RECORD_META_KEYS = ['date', 'id', 'version', 'createdAt', 'updatedAt'];
+
+// RECORD_ITEMS が持つ項目か（"toString" など、オブジェクトが元から持つ名前を項目とみなさない）
+function isRecordItemKey(key) {
+  return Object.prototype.hasOwnProperty.call(RECORD_ITEMS, key);
+}
+
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// 知らない項目の値が空か（null・''・[]・{}）
+function isBlankValue(v) {
+  if (v == null || v === '') return true;
+  if (Array.isArray(v)) return v.length === 0;
+  return isPlainObject(v) && Object.keys(v).length === 0;
+}
+
+// ユーザーの記録が1つでもあるか。
+// 知っている項目は正常な値があるとき、知らない項目（将来の項目）は空でない値があるときに数える。管理用の情報は数えない
+function hasAnyEntry(record) {
+  if (!isPlainObject(record)) return false;
+  return Object.entries(record).some(([key, value]) => {
+    if (isRecordItemKey(key)) return 'value' in RECORD_ITEMS[key].normalize(value);
+    return !RECORD_META_KEYS.includes(key) && !isBlankValue(value);
+  });
+}
+
+// その日の睡眠の一覧（無ければ空の配列）
+function recordSleeps(record) {
+  return Array.isArray(record?.sleeps) ? record.sleeps : [];
+}
+
+// 編集した内容を、1日分の記録に反映する。
+// - 入れ替えるのは editedKeys（画面に出して編集した項目）だけ。ほかの項目（画面に出していない項目・知らない項目・管理用の情報）は残す
+// - input で未入力の項目は消す（解除した項目の古い値を残さない）
+// - input が異常値の項目は、書き換えずに前の値のまま残す（入力の検査は画面側で行う。ここでは記録を壊さないことを優先する）
+// 結果に記録が1つも無ければ null（呼び出し側でその日を消す）
+function applyRecordEdit(prev, input, editedKeys = RECORD_ITEM_KEYS) {
+  const next = isPlainObject(prev) ? JSON.parse(JSON.stringify(prev)) : {};
+  for (const key of editedKeys) {
+    if (!isRecordItemKey(key)) continue;
+    const result = RECORD_ITEMS[key].normalize(input?.[key]);
+    if (result.invalid) continue;
+    if ('value' in result) next[key] = result.value;
+    else delete next[key];
+  }
+  return hasAnyEntry(next) ? next : null;
+}
+
 // ----- 日付・時刻 -----
 // toISOString() は UTC 基準なので、日本時間の朝9時前だと「前日」になってしまう。
 // ローカル時刻の年月日から自分で組み立てる
@@ -70,9 +179,10 @@ function fromDateKey(key) {
   return new Date(y, m - 1, d);
 }
 
-// "YYYY-MM-DD" の形で、実在する日付か（"2026-02-30" などは不可）
+// "YYYY-MM-DD" の形の文字で、実在する日付か（"2026-02-30" などは不可）。
+// 文字でない値（["2026-09-13"] のような配列）は、正規表現の検査を通ってしまうので先に外す
 function isDateKey(key) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(key) && toDateKey(fromDateKey(key)) === key;
+  return typeof key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(key) && toDateKey(fromDateKey(key)) === key;
 }
 
 // 記録できる日か（2000年1月1日〜今日の、実在する日）
@@ -131,7 +241,7 @@ function sleepHours({ start, end }) {
 }
 
 function totalSleepHours(record) {
-  return record.sleeps.reduce((sum, s) => sum + sleepHours(s), 0);
+  return recordSleeps(record).reduce((sum, s) => sum + sleepHours(s), 0);
 }
 
 function isValidSleep({ start, end }) {
@@ -140,7 +250,7 @@ function isValidSleep({ start, end }) {
 
 // その日で一番長い睡眠（主な睡眠）。sleeps が1件以上あるときだけ呼ぶ
 function mainSleep(record) {
-  return record.sleeps.reduce((best, s) => (sleepHours(s) > sleepHours(best) ? s : best));
+  return recordSleeps(record).reduce((best, s) => (sleepHours(s) > sleepHours(best) ? s : best));
 }
 
 // 就寝時刻の平均。時刻を「時計の文字盤の上の点」として平均する（円周平均）。

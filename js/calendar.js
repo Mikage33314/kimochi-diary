@@ -108,8 +108,9 @@ function renderDayDetail() {
   // 空の項目は「—」で出す（無いのか、隠れているのか分からなくならないように）。
   // 「—」は読み上げで読まれない・読み方が端末で違うことがあるので、読み上げには「なし」と伝える
   const none = '<span aria-hidden="true">—</span><span class="sr-only">なし</span>';
-  const sleepHtml = r.sleeps.length
-    ? escapeHtml(`${formatHours(totalSleepHours(r))}（${r.sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`)
+  const sleeps = recordSleeps(r);
+  const sleepHtml = sleeps.length
+    ? escapeHtml(`${formatHours(totalSleepHours(r))}（${sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`)
     : none;
 
   // メモ・頑張ったことは利用者が入力した文字なので escapeHtml を通してから入れる

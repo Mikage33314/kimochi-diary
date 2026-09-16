@@ -84,14 +84,14 @@ function graphDateKeys() {
 // 7日・月ごとの表示は1日が1点、年ごとの表示は1か月が1点。
 // mood / condition / sleep は描く値（記録が無ければ null）
 function dayPoint(key, r) {
-  return { key, mood: r?.mood ?? null, condition: r?.condition ?? null, sleep: r?.sleeps.length ? totalSleepHours(r) : null };
+  return { key, mood: r?.mood ?? null, condition: r?.condition ?? null, sleep: recordSleeps(r).length ? totalSleepHours(r) : null };
 }
 
 // 1か月分の記録を平均して1点にする。count は記録日数、sleepCount は睡眠を記録した日数。
 // 睡眠は、睡眠を記録した日だけで平均する
 function monthPoint(year, month, records) {
   const recs = monthDateKeys(year, month).map((k) => records[k]).filter(Boolean);
-  const withSleep = recs.filter((r) => r.sleeps.length);
+  const withSleep = recs.filter((r) => recordSleeps(r).length);
   return {
     month,
     count: recs.length,
@@ -288,7 +288,7 @@ function periodLabel(days) {
 // ----- 期間平均のカード -----
 function renderStats(days) {
   const recs = days.map((d) => d.r).filter(Boolean);
-  const withSleep = recs.filter((r) => r.sleeps.length);
+  const withSleep = recs.filter((r) => recordSleeps(r).length);
 
   const moodAvg = average(recs.map((r) => r.mood));
   const condAvg = average(recs.map((r) => r.condition));
