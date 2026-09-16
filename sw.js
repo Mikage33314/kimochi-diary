@@ -8,19 +8,19 @@
 // ファイルを増やしたら tools/stamp-sw.mjs の APP_FILES に足す（tests/test-pwa.mjs が漏れを確かめる）
 
 // ===== 更新印ここから（tools/stamp-sw.mjs が書き換える。手で直さない） =====
-const CACHE_NAME = 'kimochi-diary-420672d6a707';
+const CACHE_NAME = 'kimochi-diary-f2feb8ff3723';
 const APP_FILES = {
   './': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
   'index.html': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
-  'style.css': '6a23413bd99c22394aa06a4a1797998779500b07580fae4396d28d30e36e32d1',
+  'style.css': '542788771e1452a3a3413b54fed7095526f0fa8093afbc815e688c1e197878be',
   'manifest.webmanifest': '77207f237ebc14db658fc8d1882cf6c857148a5905f9f5a452eb291e9fe1f501',
-  'js/common.js': 'e499cb0d37c958b462183acf3164e4f83262311735f308b242681a15bca3d585',
+  'js/common.js': '69e46dda97c63714ba09a111c98b3ae6ddeb49696a20c7f7846f51f432d61018',
   'js/storage.js': '9140651c63291a4f157889e990abb3dfd97ec50c249e76bc5dd12ee571d143b2',
   'js/toast.js': 'a402f0897b19bc023842ebe06a612ad51923cd71e02e4a1b185f64643af17fbf',
-  'js/record.js': 'a791a0cfcbb8e47f27a8270e4d47771c8de735b20a770d8bdda3808399d9ad2d',
-  'js/calendar.js': '8060b47b3846dd943d578dfaf5ac3553d80cb264d35769028dfabd85cd607e97',
-  'js/graph.js': '5dd9085881a2fcf7fe5ec66db4e8d812238dc3240b700649bf24b8acf68ecd03',
-  'js/settings.js': '41e08f1c24107b115cf045057e7f96e0fb8a328027e23cc65233addbca03fea1',
+  'js/record.js': '206d1da92de98c3447ff7e2e2d9a76a01d05200c0ecc33840bc365fce1874816',
+  'js/calendar.js': '3b035bb9800b9ba49093fab0e5b81cb1e284a2ea7b40853c5eb25c856eea6d3e',
+  'js/graph.js': '363031cc4067976e810789d644784a7bb55e9b4d75a5385c53edfa42a0ffa70d',
+  'js/settings.js': '3ebfcfcc2c90aed18fdb2591666b6876e0e640a502bb9d07aebc45e86437b60a',
   'js/main.js': '158c760e5f87a5da205bd04a2c9a5db68cc2160f0e4f8ff4f70c6b34324c3514',
   'images/botanical-shadow.webp': 'aa4c3b29a2f512707192756ebffab2f428e94baf95ce7bd385b73ac715ab5d51',
   'icons/icon.svg': '2be433dd9f88ebde51bcfbe6036e2191f496c1b9015fe5a76b9785c8336518d1',

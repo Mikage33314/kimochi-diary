@@ -37,12 +37,14 @@ const CONDITIONS = [
 ];
 
 // 保存したときに返す言葉。体調が悪い日は体調を気づかい、それ以外は気分に寄り添う。
+// 気分・体調はどちらも任意。気分が無く、体調も悪くない日（睡眠だけ など）は null（言葉なし）。
 // 前回と同じ言葉が続かないように選ぶ
 let lastCheerText = '';
 function cheerFor(mood, condition) {
-  const cond = CONDITIONS[condition - 1];
-  const source = cond.cares ? cond : MOODS[mood - 1];
-  const list = cond.cares ?? source.cheers;
+  const cond = CONDITIONS[condition - 1]; // 体調が無ければ undefined
+  const source = cond?.cares ? cond : MOODS[mood - 1];
+  if (!source) return null;
+  const list = source.cares ?? source.cheers;
   const choices = list.filter((t) => t !== lastCheerText);
   lastCheerText = choices[Math.floor(Math.random() * choices.length)];
   return { icon: source.icon, text: lastCheerText };

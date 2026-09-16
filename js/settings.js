@@ -32,6 +32,11 @@ function daysAgoText(date) {
   return diff === 1 ? '昨日' : `${diff}日前`;
 }
 
+// 記録のある日数。管理用の情報だけの日などは数えない（hasAnyEntry）
+function countRecordedDays(records) {
+  return Object.values(records).filter(hasAnyEntry).length;
+}
+
 // 取り分けたデータのカードの説明文
 function brokenNoteText(count) {
   if (storageLockReason === 'newer') {
@@ -50,7 +55,7 @@ function brokenNoteText(count) {
 }
 
 function renderSettings() {
-  const count = Object.keys(loadRecords()).length; // ここで読み直すと、止めていた保存の再開も試される
+  const count = countRecordedDays(loadRecords()); // ここで読み直すと、止めていた保存の再開も試される
   const last = readLastBackup();
   // 「まだありま／せん」のように途中で改行されないよう、日付の部分はひとかたまりにする
   const lastEl = document.createElement('span');
@@ -64,7 +69,7 @@ function renderSettings() {
   undoImportCard.hidden = !before;
   if (before) {
     const when = before.savedAt ? `・${formatDateJa(toDateKey(before.savedAt))}に読み込み` : '';
-    undoImportInfoEl.textContent = `${Object.keys(before.records).length}日分${when}`;
+    undoImportInfoEl.textContent = `${countRecordedDays(before.records)}日分${when}`;
   }
 
   // 保存を止めているときは、取り分けが無くても出す（読めない元のデータを書き出せるように）
@@ -151,7 +156,7 @@ const EXPORT_FAILED_MESSAGE = [
 // ファイル名からは中身が分からないようにする（共有シートや「ファイル」アプリで人目に触れるため）
 exportBtn.addEventListener('click', async () => {
   const records = loadRecords();
-  if (Object.keys(records).length === 0) {
+  if (countRecordedDays(records) === 0) {
     settingsStatusEl.textContent = '書き出す記録がまだありません';
     return;
   }
@@ -193,7 +198,7 @@ importFileInput.addEventListener('change', async () => {
     settingsStatusEl.textContent = result.error; // 新しい版のアプリのファイルなど、利用者が対処できる理由はそのまま出す
     return;
   }
-  const current = Object.keys(loadRecords()).length;
+  const current = countRecordedDays(loadRecords());
   if (storageLocked) {
     settingsStatusEl.textContent = saveErrorMessage();
     return;
@@ -224,8 +229,8 @@ undoImportBtn.addEventListener('click', () => {
     renderSettings();
     return;
   }
-  const current = Object.keys(loadRecords()).length;
-  const message = `読み込む前の記録（${Object.keys(before.records).length}日分）に戻します。\n今の記録（${current}日分）は置き換わります。よろしいですか？`;
+  const current = countRecordedDays(loadRecords());
+  const message = `読み込む前の記録（${countRecordedDays(before.records)}日分）に戻します。\n今の記録（${current}日分）は置き換わります。よろしいですか？`;
   if (!confirm(message + draftDiscardNote())) return;
 
   if (!saveRecords(before.records)) {
@@ -280,7 +285,7 @@ shareBtn.addEventListener('click', async () => {
 
 // 二重に確かめてから、このアプリのデータをすべて消す
 deleteAllBtn.addEventListener('click', () => {
-  const count = Object.keys(loadRecords()).length;
+  const count = countRecordedDays(loadRecords());
   if (!confirm(`記録（${count}日分）・取り分けたデータ・書きかけを、すべて削除します。\n元には戻せません。`)) return;
   if (!confirm('本当に削除しますか？\n書き出していない記録は、二度と見られなくなります。')) return;
 

@@ -136,8 +136,9 @@ function updateDateInfo(records) {
   dateHintEl.textContent = currentKey === today ? '今日の記録' : currentKey === yesterday ? '昨日の記録' : '';
 
   // 今日を表示中で、昨日がまだ記録されていないときだけ出す（責めない言い方で）。
-  // 記録が1件もない初回は出さない（始めたばかりの人に、いきなり昨日のことを聞かない）
-  const showNudge = currentKey === today && !records[yesterday] && Object.keys(records).length > 0;
+  // 記録が1件もない初回は出さない（始めたばかりの人に、いきなり昨日のことを聞かない）。
+  // 「記録あり」は hasAnyEntry で判断する（管理用の情報だけの日は数えない）
+  const showNudge = currentKey === today && !hasAnyEntry(records[yesterday]) && Object.values(records).some(hasAnyEntry);
   nudgeBtn.hidden = !showNudge;
   const y = fromDateKey(yesterday);
   nudgeBtn.querySelector('.nudge-text').textContent = showNudge ? `昨日（${y.getMonth() + 1}/${y.getDate()}）の分もつける？` : '';
@@ -206,9 +207,10 @@ function fillForm(dateKey) {
   effortInput.value = r?.effort ?? '';
   syncGrow(memoInput);
   syncGrow(effortInput);
-  deleteBtn.hidden = !r;
+  const recorded = hasAnyEntry(r); // 管理用の情報だけの日は、記録の無い日として開く
+  deleteBtn.hidden = !recorded;
   // 「編集中」は読み上げない枠に出す。保存時のお知らせと二重に読み上げられないように
-  editStateEl.textContent = r ? `${formatDateJa(dateKey)}の記録を編集中` : '';
+  editStateEl.textContent = recorded ? `${formatDateJa(dateKey)}の記録を編集中` : '';
   recordStatusEl.textContent = '';
   formDirty = false;
   clearDraft(); // フォームを入れ替えたら、前の書きかけは要らない
@@ -423,8 +425,9 @@ recordForm.addEventListener('submit', (e) => {
     return;
   }
   fillForm(currentKey); // 空の睡眠行を片付け、「編集中」の表示にする
-  const cheer = cheerFor(input.mood, input.condition); // 気分・体調に合わせた言葉を返す
-  showToast({ icon: cheer.icon, title: `${formatDateJa(currentKey)}を記録しました`, text: cheer.text, duration: 4000 });
+  // 気分・体調に合わせた言葉を返す。どちらも無い日（睡眠だけ など）は言葉なしで、記録したことだけ伝える
+  const cheer = cheerFor(input.mood, input.condition);
+  showToast({ icon: cheer?.icon, title: `${formatDateJa(currentKey)}を記録しました`, text: cheer?.text ?? '', duration: 4000 });
 });
 
 deleteBtn.addEventListener('click', () => {
@@ -446,7 +449,7 @@ deleteBtn.addEventListener('click', () => {
 // 削除した記録を戻す。その間に同じ日を記録していたら、上書きしない
 function undoDelete(key, record) {
   const records = loadRecords();
-  if (records[key]) return;
+  if (hasAnyEntry(records[key])) return;
   records[key] = record;
   if (!saveRecords(records)) {
     showToast({ icon: '⚠️', text: saveErrorMessage(), duration: 6000 });

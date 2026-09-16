@@ -87,25 +87,35 @@ function dayPoint(key, r) {
   return { key, mood: r?.mood ?? null, condition: r?.condition ?? null, sleep: recordSleeps(r).length ? totalSleepHours(r) : null };
 }
 
-// 1か月分の記録を平均して1点にする。count は記録日数、sleepCount は睡眠を記録した日数。
-// 睡眠は、睡眠を記録した日だけで平均する
+// 記録の中の、その項目（気分・体調）の値の一覧。項目はどれも任意なので、値の無い日は除く
+function scoresOf(recs, field) {
+  return recs.map((r) => r[field]).filter((v) => v != null);
+}
+
+// 1か月分の記録を平均して1点にする。count は記録のある日数。
+// 平均は項目ごとに、その項目の値がある日だけで出す（moodCount・conditionCount・sleepCount がそれぞれの分母）
 function monthPoint(year, month, records) {
-  const recs = monthDateKeys(year, month).map((k) => records[k]).filter(Boolean);
+  const recs = monthDateKeys(year, month).map((k) => records[k]).filter(hasAnyEntry);
+  const moods = scoresOf(recs, 'mood');
+  const conditions = scoresOf(recs, 'condition');
   const withSleep = recs.filter((r) => recordSleeps(r).length);
   return {
     month,
     count: recs.length,
+    moodCount: moods.length,
+    conditionCount: conditions.length,
     sleepCount: withSleep.length,
-    mood: average(recs.map((r) => r.mood)),
-    condition: average(recs.map((r) => r.condition)),
+    mood: average(moods),
+    condition: average(conditions),
     sleep: average(withSleep.map((r) => totalSleepHours(r))),
   };
 }
 
-// 年ごとの表示で、記録が少ない月か。気分・体調は記録日数、睡眠は睡眠を記録した日数で決める
+// 年ごとの表示で、その項目の記録が少ない月か。項目ごとに、その項目の値がある日数で決める
 // （1日1点の表示には日数が無いので、いつも false）
 const isFew = (n) => n != null && n > 0 && n < FEW_DAYS;
-const isFewDays = (p) => isFew(p.count);
+const isFewMood = (p) => isFew(p.moodCount);
+const isFewCondition = (p) => isFew(p.conditionCount);
 const isFewSleep = (p) => isFew(p.sleepCount);
 
 // i 番目の点の x 座標。各点の「枠」の中央に置くので、棒と折れ線の位置がそろう
@@ -194,20 +204,22 @@ function drawMoodChart(points) {
   }
   drawXLabels(svg, points, H);
 
-  if (!points.some((p) => p.mood != null)) {
+  // 気分も体調も無い期間だけ「記録はありません」（片方だけの期間は、ある方を描く）
+  if (!points.some((p) => p.mood != null || p.condition != null)) {
     drawEmpty(svg, H);
     return;
   }
 
-  // 気分は実線と丸、体調は破線と四角。色だけに頼らず、線と点の形でも見分けられるようにする
+  // 気分は実線と丸、体調は破線と四角。色だけに頼らず、線と点の形でも見分けられるようにする。
+  // 少ない月（weak）は項目ごとに、その項目の日数で決める
   const series = [
-    { cls: 'series-mood', shape: 'circle', values: points.map((p) => p.mood) },
-    { cls: 'series-condition', shape: 'square', values: points.map((p) => p.condition) },
+    { cls: 'series-mood', shape: 'circle', values: points.map((p) => p.mood), weak: points.map(isFewMood) },
+    { cls: 'series-condition', shape: 'square', values: points.map((p) => p.condition), weak: points.map(isFewCondition) },
   ];
   const r = n <= 12 ? 4 : 3;
   const xFn = (i) => xAt(i, n);
-  const weak = points.map(isFewDays);
   for (const s of series) {
+    const { weak } = s;
     const { solid, dotted } = seriesPaths(s.values, weak, xFn, y);
     if (dotted) svgEl('path', { d: dotted, class: `gap-line ${s.cls}` }, svg);
     if (solid) svgEl('path', { d: solid, class: `line ${s.cls}` }, svg);
@@ -286,12 +298,15 @@ function periodLabel(days) {
 }
 
 // ----- 期間平均のカード -----
+// 平均は項目ごとに、その項目の値がある日だけで出し、その日数をカードに添える（記録のある日数を分母にしない）
 function renderStats(days) {
-  const recs = days.map((d) => d.r).filter(Boolean);
+  const recs = days.map((d) => d.r).filter(hasAnyEntry);
   const withSleep = recs.filter((r) => recordSleeps(r).length);
 
-  const moodAvg = average(recs.map((r) => r.mood));
-  const condAvg = average(recs.map((r) => r.condition));
+  const moods = scoresOf(recs, 'mood');
+  const conditions = scoresOf(recs, 'condition');
+  const moodAvg = average(moods);
+  const condAvg = average(conditions);
   // 睡眠・就寝時刻は、平均か中央値（statKind）で出す。気分・体調は1〜5の段階なので平均だけ
   const isMedian = statKind === 'median';
   const statName = isMedian ? '中央値' : '平均';
@@ -302,36 +317,38 @@ function renderStats(days) {
 
   // 平均値を四捨五入して、近い顔アイコンを添える
   const score = (avg, list) => (avg == null ? '—' : `${list[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`);
-  const card = (label, value) => `
+  // 月ごと・年ごとで記録が少ないときは、平均があてにならないことを添える（7日は少なくて当たり前なので添えない）
+  const fewIn = (n) => graphMode !== 'week' && isFew(n);
+  // count はその項目の値がある日数。0日なら数値も日数も出さない
+  const card = (label, value, count) => `
     <div class="stat">
       <div class="stat-label">${label}</div>
       <div class="stat-value">${value}</div>
+      ${count ? `<div class="stat-days">${count}日分${fewIn(count) ? '・参考程度に' : ''}</div>` : ''}
     </div>`;
 
-  // 月ごと・年ごとで記録が少ないときは、平均があてにならないことを添える（7日は少なくて当たり前なので添えない）
-  const few = graphMode !== 'week' && isFew(recs.length);
   const period = periodLabel(days);
-  statsNoteEl.textContent = `${period}のうち ${recs.length}日 記録${few ? '（少ないので参考程度に）' : ''}`;
+  statsNoteEl.textContent = `${period}のうち ${recs.length}日 記録${fewIn(recs.length) ? '（少ないので参考程度に）' : ''}`;
   statsEl.innerHTML =
-    card('気分の平均', score(moodAvg, MOODS)) +
-    card('体調の平均', score(condAvg, CONDITIONS)) +
-    card(`睡眠の${statName}`, sleepStat == null ? '—' : formatHours(sleepStat)) +
-    card(isMedian ? '就寝時刻の中央値' : '平均の就寝時刻', bedtime ?? '—');
+    card('気分の平均', score(moodAvg, MOODS), moods.length) +
+    card('体調の平均', score(condAvg, CONDITIONS), conditions.length) +
+    card(`睡眠の${statName}`, sleepStat == null ? '—' : formatHours(sleepStat), withSleep.length) +
+    card(isMedian ? '就寝時刻の中央値' : '平均の就寝時刻', bedtime ?? '—', bedtime == null ? 0 : withSleep.length);
 
   // 読み上げ用に、グラフの内容を文章でも持たせる（絵としてのグラフの代わり）
-  const avgText = (avg) => (avg == null ? 'なし' : avg.toFixed(1));
+  const avgText = (avg, count) => (avg == null ? 'なし' : `${avg.toFixed(1)}（${count}日）`);
   moodChartEl.setAttribute('aria-label',
-    `気分と体調の推移（${period}、記録${recs.length}日）。気分の平均${avgText(moodAvg)}、体調の平均${avgText(condAvg)}`);
+    `気分と体調の推移（${period}、記録${recs.length}日）。気分の平均${avgText(moodAvg, moods.length)}、体調の平均${avgText(condAvg, conditions.length)}`);
   sleepChartEl.setAttribute('aria-label',
-    `睡眠時間の推移（${period}）。${statName}${sleepStat == null ? 'なし' : formatHours(sleepStat)}`);
+    `睡眠時間の推移（${period}）。${statName}${sleepStat == null ? 'なし' : `${formatHours(sleepStat)}（${withSleep.length}日）`}`);
 }
 
 // 年ごとの表示の読み上げ用：気分の月平均が一番低い月・高い月。
-// 記録が少ない月は除く。表示と同じ小数1桁で比べ、同じ値の月は「2月・9月」と並べる。
+// 気分の記録が少ない月は除く。表示と同じ小数1桁で比べ、同じ値の月は「2月・9月」と並べる。
 // 比べられる月が2つ未満、または全部同じ値なら何も言わない
 function yearMoodSummary(points) {
   const months = points
-    .filter((p) => p.mood != null && !isFewDays(p))
+    .filter((p) => p.mood != null && !isFewMood(p))
     .map((p) => ({ name: `${p.month + 1}月`, mood: Number(p.mood.toFixed(1)) }));
   if (months.length < 2) return '';
   const moods = months.map((m) => m.mood);
@@ -339,11 +356,12 @@ function yearMoodSummary(points) {
   const high = Math.max(...moods);
   if (low === high) return '';
   const names = (v) => months.filter((m) => m.mood === v).map((m) => m.name).join('・');
-  const note = points.some(isFewDays) ? `（記録が${FEW_DAYS}日未満の月は除きます）` : '';
+  const note = points.some(isFewMood) ? `（気分の記録が${FEW_DAYS}日未満の月は除きます）` : '';
   return `。気分の月平均が一番低いのは${names(low)}（${low.toFixed(1)}）、一番高いのは${names(high)}（${high.toFixed(1)}）${note}`;
 }
 
-// 年ごとの表示の下の表：各月の記録日数と月平均。今年は今月まで。記録が少ない月には ※ を付ける
+// 年ごとの表示の下の表：各月の記録日数と月平均。今年は今月まで。
+// ※ は値ごとに、その項目の記録が少ない月に付ける
 function renderYearTable(points) {
   const now = new Date();
   const lastMonth = graphYear === now.getFullYear() ? now.getMonth() : 11;
@@ -351,10 +369,10 @@ function renderYearTable(points) {
   const mark = (few) => (few ? '※' : '');
   yearTableBody.innerHTML = points.slice(0, lastMonth + 1).map((p) => `
     <tr>
-      <th scope="row">${p.month + 1}月${mark(isFewDays(p))}</th>
+      <th scope="row">${p.month + 1}月</th>
       <td>${p.count}日</td>
-      <td>${num(p.mood)}</td>
-      <td>${num(p.condition)}</td>
+      <td>${p.mood == null ? '—' : num(p.mood) + mark(isFewMood(p))}</td>
+      <td>${p.condition == null ? '—' : num(p.condition) + mark(isFewCondition(p))}</td>
       <td>${p.sleep == null ? '—' : formatHours(p.sleep) + mark(isFewSleep(p))}</td>
     </tr>`).join('');
 }
@@ -383,7 +401,7 @@ function renderGraph() {
   renderStats(days);
   drawMoodChart(points);
   drawSleepChart(points);
-  chartNoteEl.hidden = !points.some((p) => isFewDays(p) || isFewSleep(p));
+  chartNoteEl.hidden = !points.some((p) => isFewMood(p) || isFewCondition(p) || isFewSleep(p));
   yearTableEl.hidden = !isYear;
   if (isYear) {
     renderYearTable(points);
@@ -426,5 +444,5 @@ graphPrevBtn.addEventListener('click', () => moveGraphPeriod(-1));
 graphNextBtn.addEventListener('click', () => moveGraphPeriod(1));
 // 注記の「（参考程度に）」は、途中で改行して「に）」だけが次の行に残らないよう、ひとかたまりにする
 const fewNote = (text) => [text, Object.assign(document.createElement('span'), { className: 'nowrap', textContent: '（参考程度に）' })];
-chartNoteEl.replaceChildren(...fewNote(`白抜きの点・淡い棒は、記録が${FEW_DAYS}日未満の月です`));
-document.getElementById('year-table-note').replaceChildren(...fewNote(`※ は記録が${FEW_DAYS}日未満の月です`));
+chartNoteEl.replaceChildren(...fewNote(`白抜きの点・淡い棒は、その項目の記録が${FEW_DAYS}日未満の月です`));
+document.getElementById('year-table-note').replaceChildren(...fewNote(`※ は、その項目の記録が${FEW_DAYS}日未満の月です`));

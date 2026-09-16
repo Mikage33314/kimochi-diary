@@ -31,14 +31,18 @@ function renderCalendar() {
 
   // 1日の曜日の位置まで空白マスで埋める
   let html = '<div class="cal-cell is-blank"></div>'.repeat(firstWeekday);
-  const levels = [];
+  let recordedDays = 0; // 記録のある日（項目はどれでもよい）
+  const levels = [];    // 表示中の項目（気分か体調）の値がある日の段階。平均の分母はこの日数
 
   for (let d = 1; d <= lastDate; d++) {
     const key = toDateKey(new Date(calYear, calMonth, d));
     const r = records[key];
-    const level = r?.[kind.field]; // 気分か体調の段階（1〜5）
-    const option = r && kind.options[level - 1];
-    if (r) levels.push(level);
+    // 記録の項目はどれも任意。管理用の情報だけの日は記録なしとして表示する
+    const recorded = hasAnyEntry(r);
+    const level = recorded ? r[kind.field] : undefined; // 気分か体調の段階（1〜5）。無い日もある
+    const option = level ? kind.options[level - 1] : null;
+    if (recorded) recordedDays++;
+    if (option) levels.push(level);
 
     const weekday = (firstWeekday + d - 1) % 7;
     const isToday = key === todayKey;
@@ -50,21 +54,27 @@ function renderCalendar() {
 
     // 段階は loadRecords() で 1〜5 の整数に直してあるので、そのまま属性に入れても安全。
     // 色は data-level で付ける（気分・体調で同じ5段階の色）。
+    // 記録はあるが表示中の項目が無い日は、色を付けず小さな点で「記録あり」を示す（見た目は暫定）。
     // 未来の日は押せなくする。選択中（aria-pressed）と今日（aria-current）は読み上げでも伝える
+    let state = '';
+    if (option) state = `、${kind.name}：${option.label}`;
+    else if (recorded) state = `、記録あり、${kind.name}なし`;
     html += `
       <button type="button" class="${classes.join(' ')}" data-date="${key}"
-        ${r ? `data-level="${level}"` : ''} ${key > todayKey ? 'disabled' : ''}
+        ${option ? `data-level="${level}"` : ''} ${key > todayKey ? 'disabled' : ''}
         aria-pressed="${key === selectedKey}" ${isToday ? 'aria-current="date"' : ''}
-        aria-label="${calMonth + 1}月${d}日${option ? `、${kind.name}：${option.label}` : ''}">
+        aria-label="${calMonth + 1}月${d}日${state}">
         <span class="cal-day">${d}</span>
-        <span class="cal-icon">${option ? option.icon : ''}</span>
+        <span class="cal-icon">${option ? option.icon : recorded ? '<span class="cal-dot"></span>' : ''}</span>
       </button>`;
   }
   calendarEl.innerHTML = html;
 
+  // 平均は、表示中の項目の値がある日だけで出し、その日数を添える（記録のある日数を分母にしない）
   const avg = average(levels);
-  calSummaryEl.textContent = levels.length
-    ? `記録 ${levels.length}日 ・ 平均の${kind.name} ${kind.options[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`
+  const avgText = levels.length ? `${kind.options[Math.round(avg) - 1].icon} ${avg.toFixed(1)}（${levels.length}日）` : '—';
+  calSummaryEl.textContent = recordedDays
+    ? `記録 ${recordedDays}日 ・ 平均の${kind.name} ${avgText}`
     : 'この月の記録はまだありません';
 
   calNextBtn.disabled = isCurrentOrFutureMonth(calYear, calMonth); // 今月より先へは進めない
@@ -96,18 +106,23 @@ function renderDayDetail() {
   const r = loadRecords()[selectedKey];
   const title = `<h2 class="detail-title">${formatDateJa(selectedKey)}</h2>`;
 
-  if (!r) {
+  if (!hasAnyEntry(r)) {
     dayDetailEl.innerHTML = `${title}
       <p class="detail-empty">この日の記録はまだありません</p>
       <button type="button" class="sub-btn" data-edit>この日を記録する</button>`;
     return;
   }
 
-  const mood = MOODS[r.mood - 1];
-  const cond = CONDITIONS[r.condition - 1];
+  // 気分・体調も、ほかの項目と同じく無い日がある
+  const mood = r.mood ? MOODS[r.mood - 1] : null;
+  const cond = r.condition ? CONDITIONS[r.condition - 1] : null;
   // 空の項目は「—」で出す（無いのか、隠れているのか分からなくならないように）。
   // 「—」は読み上げで読まれない・読み方が端末で違うことがあるので、読み上げには「なし」と伝える
   const none = '<span aria-hidden="true">—</span><span class="sr-only">なし</span>';
+  const moodChip = mood
+    ? `<span class="chip" data-mood="${r.mood}">${mood.icon} 気分：${mood.label}</span>`
+    : `<span class="chip">気分：${none}</span>`;
+  const condChip = cond ? `<span class="chip">${cond.icon} 体調：${cond.label}</span>` : `<span class="chip">体調：${none}</span>`;
   const sleeps = recordSleeps(r);
   const sleepHtml = sleeps.length
     ? escapeHtml(`${formatHours(totalSleepHours(r))}（${sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`)
@@ -116,8 +131,8 @@ function renderDayDetail() {
   // メモ・頑張ったことは利用者が入力した文字なので escapeHtml を通してから入れる
   dayDetailEl.innerHTML = `${title}
     <div class="detail-chips">
-      <span class="chip" data-mood="${r.mood}">${mood.icon} 気分：${mood.label}</span>
-      <span class="chip">${cond.icon} 体調：${cond.label}</span>
+      ${moodChip}
+      ${condChip}
     </div>
     <dl class="detail-list">
       <dt>睡眠</dt><dd>${sleepHtml}</dd>

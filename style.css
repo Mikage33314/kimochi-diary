@@ -607,6 +607,8 @@ button.cal-cell:not([data-level]) { background: none; }
   font-variant-numeric: tabular-nums;
 }
 .cal-icon { font-size: 1.25rem; line-height: 1.1; min-height: 1.1em; }
+/* 記録はあるが、表示中の項目（気分／体調）が無い日の印（暫定）。色だけに頼らず「点」の形で示す。--muted は地に対して 3:1 以上 */
+.cal-dot { display: inline-block; width: 6px; height: 6px; vertical-align: middle; background: var(--muted); border-radius: 50%; }
 .cal-cell.is-sun .cal-day { color: var(--sun); }
 .cal-cell.is-sat .cal-day { color: var(--sat); }
 /* 今日は日付をサーモンの丸で囲む。選択中の日は濃いサーモンの枠（気分の色の上でも見えるように） */
@@ -704,6 +706,8 @@ button.cal-cell:not([data-level]) { background: none; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* その項目の値がある日数（平均の分母）。項目ごとに違うので、数値の下に小さく添える */
+.stat-days { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* 見出しと凡例が1行に収まらないとき（320px 幅の「気分・体調（月平均）」など）は、凡例を次の行へ回す */
 .chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
