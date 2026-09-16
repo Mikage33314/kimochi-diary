@@ -148,15 +148,14 @@ function recordSleeps(record) {
 
 // 編集した内容を、1日分の記録に反映する。
 // - 入れ替えるのは editedKeys（画面に出して編集した項目）だけ。ほかの項目（画面に出していない項目・知らない項目・管理用の情報）は残す
-// - input で未入力の項目は消す（解除した項目の古い値を残さない）
-// - input が異常値の項目は、書き換えずに前の値のまま残す（入力の検査は画面側で行う。ここでは記録を壊さないことを優先する）
+// - input で未入力・異常値の項目は消す（解除した項目の古い値を残さない。異常値のときも前の値に戻さない）。
+//   入力の検査は画面側で保存の前に行う
 // 結果に記録が1つも無ければ null（呼び出し側でその日を消す）
 function applyRecordEdit(prev, input, editedKeys = RECORD_ITEM_KEYS) {
   const next = isPlainObject(prev) ? JSON.parse(JSON.stringify(prev)) : {};
   for (const key of editedKeys) {
     if (!isRecordItemKey(key)) continue;
     const result = RECORD_ITEMS[key].normalize(input?.[key]);
-    if (result.invalid) continue;
     if ('value' in result) next[key] = result.value;
     else delete next[key];
   }

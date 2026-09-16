@@ -8,13 +8,13 @@
 // ファイルを増やしたら tools/stamp-sw.mjs の APP_FILES に足す（tests/test-pwa.mjs が漏れを確かめる）
 
 // ===== 更新印ここから（tools/stamp-sw.mjs が書き換える。手で直さない） =====
-const CACHE_NAME = 'kimochi-diary-ab001234cab5';
+const CACHE_NAME = 'kimochi-diary-6b70bf475db0';
 const APP_FILES = {
   './': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
   'index.html': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
   'style.css': '6a23413bd99c22394aa06a4a1797998779500b07580fae4396d28d30e36e32d1',
   'manifest.webmanifest': '77207f237ebc14db658fc8d1882cf6c857148a5905f9f5a452eb291e9fe1f501',
-  'js/common.js': '2c281bc478e6c74495fe9c60582ad76ad1587355d776837d2aa7831ba18041ce',
+  'js/common.js': 'e499cb0d37c958b462183acf3164e4f83262311735f308b242681a15bca3d585',
   'js/storage.js': '0b09ff9338adec902325cc7ce4419709d82f84478fd50af6d18e85a92291a737',
   'js/toast.js': 'a402f0897b19bc023842ebe06a612ad51923cd71e02e4a1b185f64643af17fbf',
   'js/record.js': 'a791a0cfcbb8e47f27a8270e4d47771c8de735b20a770d8bdda3808399d9ad2d',
