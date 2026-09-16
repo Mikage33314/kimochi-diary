@@ -785,6 +785,11 @@ button.cal-cell:not([data-level]) { background: none; }
 .year-table th,
 .year-table td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--line); }
 .year-table th:first-child { text-align: left; }
+/* 320px の画面では、少ない月の ※ が気分・体調・睡眠の値ごとに付くと、表がわずかに収まらなくなるので、すき間を詰める */
+@media (max-width: 359px) {
+  .year-table th,
+  .year-table td { padding-inline: 4px; }
+}
 .year-table thead th { font-size: .75rem; font-weight: 400; color: var(--muted); }
 
 /* ===== 設定 ===== */
