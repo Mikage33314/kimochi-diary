@@ -405,12 +405,12 @@ function makeBackup(records) {
 // 新しい版・変換できないときは { error }
 function recordsFromBackup(data) {
   const version = data.version ?? 1;
-  if (!Number.isInteger(version) || version < 1) return { error: '対応していない形式のファイルのため、読み込めません' };
+  if (!Number.isInteger(version) || version < 1) return { error: '対応していない形式のファイルのため、読み込めません', unreadable: true };
   if (version > DATA_VERSION) return { error: '新しい版のアプリで書き出したファイルのため、読み込めません' };
   try {
     return { records: migrateRecords(data.records, version) };
   } catch {
-    return { error: '古い形式のファイルを、今の形式に直せませんでした' };
+    return { error: '古い形式のファイルを、今の形式に直せませんでした', unreadable: true };
   }
 }
 
@@ -425,8 +425,6 @@ function markBackedUp() {
   writeItem(LAST_BACKUP_KEY, new Date().toISOString()); // 日時を記録できなくても、書き出し自体は済んでいる
 }
 
-// バックアップのファイルの中身（文字列）を検査する。
-// 読めなければ { error }、読めれば { records, count（記録ありの日数）, dropped, changed, future }
 // 読み込むファイルの入れ子の深さの上限（ファイルの一番外を1段と数える）。記録の形は数段しか使わない。
 // これより深いファイルは読み込まない（深すぎるデータを入れると、書き出しの JSON を作る処理が止まり、以後書き出せなくなるため）
 const MAX_IMPORT_DEPTH = 100;
@@ -443,10 +441,14 @@ function isTooDeep(value, limit) {
   return false;
 }
 
+// バックアップのファイルの中身（文字列）を検査する。
+// 読めなければ { error }、読めれば { records, count（記録ありの日数）, dropped, changed, future }。
+// unreadable: true は「このアプリのファイルとして読めない」（壊れている・書き換えられている など）。
+// error の文は、原因を調べるための詳しい理由。画面には出さず、利用者には分かる言葉でまとめて知らせる（settings.js）
 function parseBackupText(text) {
   const data = parseJson(text);
-  if (data === undefined) return { error: 'JSON ファイルとして読めませんでした' };
-  if (isTooDeep(data, MAX_IMPORT_DEPTH)) return { error: 'ファイルの中のデータの入れ子が深すぎるため、読み込めません' };
+  if (data === undefined) return { error: 'JSON ファイルとして読めませんでした', unreadable: true };
+  if (isTooDeep(data, MAX_IMPORT_DEPTH)) return { error: 'ファイルの中のデータの入れ子が深すぎるため、読み込めません', unreadable: true };
   // 書き出した形式 { app, version, records } と、記録だけの形式（版1とみなす）の両方を受け付ける
   let source = data;
   if (data?.app === 'kimochi-diary') {
@@ -459,7 +461,7 @@ function parseBackupText(text) {
   // 数えると、記録の無いファイルで今の記録をまるごと置き換えてしまうため）
   const result = normalizeRecords(source, { maxKey: toDateKey(new Date()) });
   const count = result ? Object.values(result.records).filter(hasAnyEntry).length : 0;
-  if (count === 0) return { error: 'このアプリの記録が見つかりませんでした' };
+  if (count === 0) return { error: 'このアプリの記録が見つかりませんでした', unreadable: true };
   return { ...result, count };
 }
 

@@ -126,6 +126,28 @@ async function shareOrDownload(filename, text) {
   return 'downloaded';
 }
 
+// ふつうに使っていれば起きないエラーの知らせ。詳しい原因（データの入れ子の深さなど）は利用者には分からないので、
+// 分かる言葉で「考えられる原因」と、することを伝える。原因に書くのは、実際に起こりうることだけにする。
+// 見落とさないよう、端末の警告ダイアログ（alert）で出す（「OK」を押すまで、ほかの操作はできない）
+const UNREADABLE_FILE_MESSAGE = [
+  'エラーが発生したため、ファイルを読み込めませんでした。今の記録はそのままです。',
+  '',
+  '考えられる原因',
+  '・このアプリの「書き出す」で作ったファイルではない',
+  '・ファイルが壊れている、または書き換えられている',
+  '',
+  'このアプリで書き出したファイルを選び直してください。',
+].join('\n');
+const EXPORT_FAILED_MESSAGE = [
+  'エラーが発生したため、書き出せませんでした。今の記録はそのままです。',
+  '',
+  '考えられる原因',
+  '・記録の中に、このアプリで扱えない形のデータが入っている（書き換えられたファイルを読み込んだ など）',
+  '・端末の空きやメモリが足りない',
+  '',
+  'アプリを閉じて開き直してから、もう一度お試しください。',
+].join('\n');
+
 // ファイル名からは中身が分からないようにする（共有シートや「ファイル」アプリで人目に触れるため）
 exportBtn.addEventListener('click', async () => {
   const records = loadRecords();
@@ -133,12 +155,13 @@ exportBtn.addEventListener('click', async () => {
     settingsStatusEl.textContent = '書き出す記録がまだありません';
     return;
   }
-  // 記録の中に深すぎるデータなどがあると、JSON を作れずに例外になる。黙って何も起きないように、理由を出す
+  // 記録の中に深すぎるデータなどがあると、JSON を作れずに例外になる。黙って何も起きないように知らせる
   let text;
   try {
     text = JSON.stringify(makeBackup(records), null, 2);
   } catch {
-    settingsStatusEl.textContent = '記録の中に書き出せない形のデータがあるため、書き出すファイルを作れませんでした';
+    settingsStatusEl.textContent = '';
+    alert(EXPORT_FAILED_MESSAGE);
     return;
   }
   const result = await shareOrDownload(`kd-backup-${toDateKey(new Date())}.json`, text);
@@ -161,8 +184,13 @@ importFileInput.addEventListener('change', async () => {
   }
 
   const result = parseBackupText(await file.text());
+  if (result.unreadable) {
+    settingsStatusEl.textContent = '';
+    alert(UNREADABLE_FILE_MESSAGE);
+    return;
+  }
   if (result.error) {
-    settingsStatusEl.textContent = result.error;
+    settingsStatusEl.textContent = result.error; // 新しい版のアプリのファイルなど、利用者が対処できる理由はそのまま出す
     return;
   }
   const current = Object.keys(loadRecords()).length;
