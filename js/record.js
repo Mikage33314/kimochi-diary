@@ -547,7 +547,8 @@ function readForm() {
     const s = readSleepRow(row);
     if (s.start === '' && s.end === '') continue;
     if (!isValidSleep(s)) {
-      showFieldError('睡眠は寝た時刻と起きた時刻の両方を入れてください（同じ時刻は不可）',
+      // 行の下の案内（sleepRowProblem）と同じ言い方にする
+      showFieldError(s.start && s.end ? '睡眠は、寝た時刻と起きた時刻を違う時刻にしてください' : '睡眠は、寝た時刻と起きた時刻の両方を入れてください',
         row.querySelector(s.start === '' ? '.sleep-start' : '.sleep-end'));
       return null;
     }
