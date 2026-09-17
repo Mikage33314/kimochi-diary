@@ -578,9 +578,14 @@ recordForm.addEventListener('submit', (e) => {
   e.preventDefault(); // フォーム送信によるページ再読み込みを止める
   // 押せない状態（変更なし・記録する項目なし）では保存しない。日付欄で Enter を押したときなども、ここで止まる。
   // 見えているボタンが押せない表示のときも保存しない（別のタブで同じ日が保存され、表示が古くなっていたとき、
-  // 「保存済み ✓」を押して古い入力で上書きしないように）。止めたときは、ボタンと書きかけを今の保存データに合わせ直す
-  if (!formSaveState().canSave || saveBtn.getAttribute('aria-disabled') === 'true') {
-    markDirty();
+  // 「保存済み ✓」を押して古い入力で上書きしないように）。止めたときは、ボタンと書きかけを今の保存データに合わせ直す。
+  // 入力が無い（formDirty が false）のに保存データと違うのは、別のタブで保存・削除されて表示が古いとき。
+  // 入力は無いので、最新の記録で開き直す（markDirty だと古い表示の値が「保存していない入力」になって書きかけにも残り、
+  // 次に押したときや開き直して戻したときに、新しい記録を古い値で上書き・削除した日を作り直してしまう）
+  const state = formSaveState();
+  if (!state.canSave || saveBtn.getAttribute('aria-disabled') === 'true') {
+    if (!formDirty && state.changed) fillForm(currentKey);
+    else markDirty();
     return;
   }
   const input = readForm();
