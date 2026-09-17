@@ -128,7 +128,7 @@ function renderDayDetail() {
     ? escapeHtml(`${formatHours(totalSleepHours(r))}（${sleeps.map((s) => `${s.start}〜${s.end}`).join('、')}）`)
     : none;
 
-  // メモ・頑張ったことは利用者が入力した文字なので escapeHtml を通してから入れる
+  // メモ・今日できたことは利用者が入力した文字なので escapeHtml を通してから入れる
   dayDetailEl.innerHTML = `${title}
     <div class="detail-chips">
       ${moodChip}
@@ -137,7 +137,7 @@ function renderDayDetail() {
     <dl class="detail-list">
       <dt>睡眠</dt><dd>${sleepHtml}</dd>
       <dt>メモ</dt><dd>${r.memo ? escapeHtml(r.memo) : none}</dd>
-      <dt>頑張ったこと</dt><dd>${r.effort ? escapeHtml(r.effort) : none}</dd>
+      <dt>今日できたこと</dt><dd>${r.effort ? escapeHtml(r.effort) : none}</dd>
     </dl>
     <button type="button" class="sub-btn" data-edit>この日を編集する</button>`;
 }
@@ -188,7 +188,7 @@ calendarEl.addEventListener('click', (e) => {
 });
 
 // 選んだ日の詳細が下のタブバーに隠れていたら、見える所までスクロールする（カレンダーの下にあるので、
-// スマホでは詳細の下の方〔頑張ったこと など〕が隠れやすい）。詳細が画面より高いときは、上端が見える所で止める
+// スマホでは詳細の下の方〔今日できたこと など〕が隠れやすい）。詳細が画面より高いときは、上端が見える所で止める
 function revealDayDetail() {
   const box = dayDetailEl.getBoundingClientRect();
   const visibleBottom = document.getElementById('tabs').getBoundingClientRect().top - 16;

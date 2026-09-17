@@ -10,7 +10,7 @@ const MIN_YEAR = Number(MIN_DATE_KEY.slice(0, 4)); // カレンダー・グラ�
 const MAX_SLEEPS = 3;              // 1日に登録できる睡眠の最大件数
 // 文字数の上限。数え方は UTF-16 の単位（入力欄の maxlength と同じ。絵文字の多くは2と数える）
 const MEMO_MAX = 100;              // ひとことメモ（index.html の maxlength と同じ値）
-const EFFORT_MAX = 200;            // 頑張ったこと（同上）
+const EFFORT_MAX = 200;            // 今日できたこと（同上。保存データのキーは effort のまま）
 const NIGHT_END_HOUR = 4;          // 0時〜4時前に開いたら、前日を「記録する日」の初期値にする
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/; // "00:00"〜"23:59"
@@ -97,7 +97,7 @@ const sleepsItem = {
   },
 };
 
-// メモ・頑張ったこと。空白だけの文字は未入力とみなす
+// メモ・今日できたこと。空白だけの文字は未入力とみなす
 const textItem = (max) => ({
   normalize(v) {
     if (v == null) return { empty: true };

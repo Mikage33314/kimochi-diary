@@ -319,7 +319,7 @@ function fillForm(dateKey) {
 
 // ----- 変更の判定と保存ボタン -----
 // 画面の入力を、保存と同じ形で読む（検査はしない）。
-// 睡眠は時刻が入っている行だけ（片方だけの行も含む）。メモ・頑張ったことは前後の空白を除く
+// 睡眠は時刻が入っている行だけ（片方だけの行も含む）。メモ・今日できたことは前後の空白を除く
 function readFormState() {
   return {
     mood: toScore(recordForm.elements.mood.value),
@@ -572,7 +572,7 @@ function readForm() {
     return null;
   }
   if (effort.length > EFFORT_MAX) {
-    showFieldError(`頑張ったことは${EFFORT_MAX}文字までです（絵文字は2文字と数えます）`, effortInput);
+    showFieldError(`今日できたことは${EFFORT_MAX}文字までです（絵文字は2文字と数えます）`, effortInput);
     return null;
   }
   return { mood, condition, sleeps, memo, effort };
