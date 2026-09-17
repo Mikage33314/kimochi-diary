@@ -372,6 +372,8 @@ input::-webkit-date-and-time-value { text-align: left; }
   font-size: .8125rem;
   line-height: 1.5;
   color: var(--text-sub);
+  /* 狭い画面で2行になるとき、「…くださ／い」のように最後の数文字だけが次の行に残らないよう、行の長さをそろえる */
+  text-wrap: balance;
 }
 
 .remove-sleep-btn {
@@ -476,6 +478,7 @@ input::-webkit-date-and-time-value { text-align: left; }
   text-align: center;
   font-size: .875rem;
   color: var(--text-sub);
+  text-wrap: balance; /* 2行になるとき、最後の数文字だけが次の行に残らないように（睡眠の行の案内と同じ） */
 }
 .settings-status { margin-top: 12px; }
 .status:empty { margin: 0; }

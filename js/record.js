@@ -216,6 +216,8 @@ addSleepBtn.addEventListener('click', () => {
   if (sleepList.children.length >= MAX_SLEEPS) return;
   appendSleepRow();
   updateSleepList();
+  // 上限に達すると押したボタンが隠れてフォーカスが迷子になるので、足した行の ✕ へ移す（その行ができたことも読み上げで伝わる）
+  if (addSleepBtn.hidden) sleepList.lastElementChild.querySelector('.remove-sleep-btn').focus({ preventScroll: true });
 });
 
 sameSleepBtn.addEventListener('click', () => {
@@ -618,8 +620,14 @@ deleteBtn.addEventListener('click', () => {
     return;
   }
   fillForm(key);
+  focusRecordView(); // 押した削除ボタンは隠れるので、フォーカスを記録画面へ移す
   // 押し間違い（子どもが触った など）に備えて、5秒ほど「元に戻す」を出す
-  showToast({ text: '削除しました', duration: 5000, action: { label: '元に戻す', onClick: () => undoDelete(key, deleted) } });
+  showToast({ text: '削除しました', duration: 5000, action: { label: '元に戻す', onClick: () => {
+    undoDelete(key, deleted);
+    // 押した「元に戻す」はお知らせと一緒に消えるので、フォーカスを表示中の画面（記録画面か、選んでいるタブ）へ移す
+    if (!recordViewEl.hidden) focusRecordView();
+    else document.querySelector('#tabs .tab.is-active')?.focus({ preventScroll: true });
+  } } });
 });
 
 // 削除した記録を戻す。その間に同じ日を記録していたら、上書きしない

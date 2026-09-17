@@ -97,6 +97,12 @@ settingsMenuEl.addEventListener('click', (e) => {
   document.querySelector(`.settings-page[data-page="${row.dataset.page}"] .page-title`).focus({ preventScroll: true });
 });
 
+// 押したボタンが隠れたとき（カードごと消えた など）は、フォーカスが迷子にならないよう、そのページのページ名へ移す
+function keepSettingsFocus(btn) {
+  if (btn.getClientRects().length) return;
+  btn.closest('.settings-page').querySelector('.page-title').focus({ preventScroll: true });
+}
+
 // 「‹」で一覧へ戻る。フォーカスは、さっき開いた項目の行へ戻す
 for (const btn of document.querySelectorAll('.settings-page [data-back]')) {
   btn.addEventListener('click', () => {
@@ -242,6 +248,7 @@ undoImportBtn.addEventListener('click', () => {
   clearBeforeImport();
   reloadRecordForm();
   renderSettings();
+  keepSettingsFocus(undoImportBtn); // 「読み込む前の記録」のカードは消える
   showToast({ icon: '↩️', text: '読み込む前の記録に戻しました' });
 });
 
@@ -249,6 +256,7 @@ undoImportDeleteBtn.addEventListener('click', () => {
   if (!confirm('読み込む前の記録を削除しますか？\n読み込みを取り消せなくなります')) return;
   clearBeforeImport();
   renderSettings();
+  keepSettingsFocus(undoImportDeleteBtn);
   showToast({ text: '削除しました' });
 });
 
@@ -262,6 +270,7 @@ brokenDeleteBtn.addEventListener('click', () => {
   const wasLocked = storageLocked;
   removeBrokenData();
   renderSettings(); // 空きができれば、ここで取り分けと保存の再開が行われる
+  keepSettingsFocus(brokenDeleteBtn); // 削除ボタン（取り分けが無くなればカードごと）は隠れる
   showToast({ text: wasLocked && !storageLocked ? '空きができたので、保存を再開しました' : '削除しました' });
 });
 
