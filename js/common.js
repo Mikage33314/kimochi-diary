@@ -3,7 +3,7 @@
 
 // アプリの Version（設定の「このアプリ」に出す。テストの記録・問い合わせで、どの版かを確かめるため）。
 // 記録の形式の版（storage.js の DATA_VERSION）とは別のもの。公開するときに、ユーザーと決めた番号にする
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.2';
 
 const MIN_DATE_KEY = '2000-01-01'; // 記録できる一番古い日
 const MIN_YEAR = Number(MIN_DATE_KEY.slice(0, 4)); // カレンダー・グラフで戻れる一番古い年
