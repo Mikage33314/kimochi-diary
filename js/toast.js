@@ -32,6 +32,11 @@ for (const target of [window, window.visualViewport]) {
   target?.addEventListener('scroll', positionToast, { passive: true });
   target?.addEventListener('resize', positionToast);
 }
+// 帯の高さが変わったとき（お知らせを出している間に、エラーの文が帯に出た など）も置き直す。重なってエラーの文を隠さないように
+if (window.ResizeObserver) {
+  const anchorObserver = new ResizeObserver(positionToast);
+  for (const el of document.querySelectorAll('[data-toast-anchor]')) anchorObserver.observe(el);
+}
 
 // 画面の下にお知らせを出す。読み上げ用の枠（role="status"）は常に表示しておき、中身だけを入れ替える。
 // 毎回新しい要素を作るので、弾むアニメーションも毎回最初から再生される。

@@ -74,13 +74,15 @@ function clearScale(el) {
   recordAnnounceEl.textContent = `${SCALE_NAMES[el.name]}の選択を外しました`;
 }
 
-let clearedByKey = false; // スペースキーで外した直後（続けて来る click で選び直さないように）
+let clearedByKey = null; // スペースキーで外した直後のボタン（続けて来る click で選び直さないように）
 
 recordForm.addEventListener('click', (e) => {
   const el = e.target;
   if (!isRadio(el)) return;
-  if (clearedByKey) {
-    e.preventDefault(); // click を取り消すと、ラジオボタンは押す前（外した状態）に戻る
+  if (clearedByKey === el) {
+    // click を取り消して、外した状態に戻す。何も選ばれていないグループでは、取り消しても選択を戻さないブラウザ（WebKit）があるので、自分でも外す
+    el.checked = false;
+    e.preventDefault();
     return;
   }
   if (selectedScale[el.name] === toScore(el.value)) clearScale(el); // 別の顔を選んだときは change で記録する
@@ -92,15 +94,18 @@ recordForm.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || !isRadio(el) || !el.checked || selectedScale[el.name] !== toScore(el.value)) return;
   e.preventDefault();
   clearScale(el);
-  clearedByKey = true;
+  clearedByKey = el;
 });
-recordForm.addEventListener('keyup', (e) => {
-  if (e.key === ' ' && clearedByKey) setTimeout(() => { clearedByKey = false; }); // keyup の後に来る click まで待つ
+// キーを離したのがフォームの外（押している間にフォーカスが移った）でも解除する。フォームで受けると解除されず、ラジオボタンを押しても選べなくなる
+document.addEventListener('keyup', (e) => {
+  if (e.key === ' ' && clearedByKey) setTimeout(() => { clearedByKey = null; }); // keyup の後に来る click まで待つ
 });
 
+// 選んでいた値は、グループで今選ばれている値にする（e.target の値ではなく）。
+// 選んでいる顔を押して外した後に、WebKit は外れたボタンで input・change を出すため
 recordForm.addEventListener('change', (e) => {
   if (e.target.type !== 'radio') return;
-  selectedScale[e.target.name] = toScore(e.target.value);
+  selectedScale[e.target.name] = toScore(recordForm.elements[e.target.name].value);
   updateScaleHint(e.target.name);
 });
 
@@ -312,12 +317,13 @@ function readFormState() {
 
 // 保存済みの記録から変わっているか。「保存していない入力があるか」の判定は、すべてここを通す
 // （選んで外して元に戻したら、変更なしに戻る）。項目ごとに RECORD_ITEMS の equals で比べる。
-// メモは保存済みの方も前後の空白を除いて比べ、睡眠は片方だけの行も「変更」に数える
+// メモは保存済みの方も前後の空白を除いて比べ、睡眠は片方だけの行も「変更」に数える。
+// 入力欄（textarea）は改行の \r\n・\r を \n にして持つので、保存済みの方もそろえてから比べる（読み込んだ記録など）
 function isFormChanged(state, saved) {
   return RECORD_ITEM_KEYS.some((key) => {
     const result = RECORD_ITEMS[key].normalize(saved?.[key]);
     const before = 'value' in result ? result.value : null;
-    return !RECORD_ITEMS[key].equals(state[key], typeof before === 'string' ? before.trim() : before);
+    return !RECORD_ITEMS[key].equals(state[key], typeof before === 'string' ? before.replace(/\r\n?/g, '\n').trim() : before);
   });
 }
 
@@ -443,7 +449,8 @@ for (const type of ['input', 'change']) {
     if (e.target === dateInput) return;
     markDirty();
     recordStatusEl.textContent = '';
-    recordAnnounceEl.textContent = '';
+    // 選択を外した直後に WebKit が出す input・change（外れたボタンから来る）では、「選択を外しました」を消さない
+    if (!(isRadio(e.target) && !e.target.checked)) recordAnnounceEl.textContent = '';
   });
 }
 
@@ -547,8 +554,13 @@ function readForm() {
 
 recordForm.addEventListener('submit', (e) => {
   e.preventDefault(); // フォーム送信によるページ再読み込みを止める
-  // 押せない状態（変更なし・記録する項目なし）では保存しない。日付欄で Enter を押したときなども、ここで止まる
-  if (!formSaveState().canSave) return;
+  // 押せない状態（変更なし・記録する項目なし）では保存しない。日付欄で Enter を押したときなども、ここで止まる。
+  // 見えているボタンが押せない表示のときも保存しない（別のタブで同じ日が保存され、表示が古くなっていたとき、
+  // 「保存済み ✓」を押して古い入力で上書きしないように）。止めたときは、ボタンと書きかけを今の保存データに合わせ直す
+  if (!formSaveState().canSave || saveBtn.getAttribute('aria-disabled') === 'true') {
+    markDirty();
+    return;
+  }
   const input = readForm();
   if (!input) return;
 
