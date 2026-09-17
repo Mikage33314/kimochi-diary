@@ -249,6 +249,25 @@ function isValidSleep({ start, end }) {
   return start !== '' && end !== '' && start !== end;
 }
 
+// 睡眠同士で時間が重なっている件の番号（0から）の Set。sleeps は isValidSleep の件だけを渡す。
+// 睡眠は目が覚めた日の記録に入るので、寝た日は時刻から決まる：寝た時刻が起きた時刻より遅ければ前日（23:00〜7:00）、
+// 早ければ当日（13:00〜14:00）。目が覚めた日の0時を0分とした1本の時間の線に並べて比べる
+// （前日22:00〜6:00 と 当日21:00〜23:00 は重ならない）。同じ時間の2件は重なり、ちょうどつながる時間は重ならない
+function overlappingSleeps(sleeps) {
+  const spans = sleeps.map(({ start, end }) => {
+    const s = toMinutes(start);
+    const e = toMinutes(end);
+    return [s > e ? s - 1440 : s, e];
+  });
+  const found = new Set();
+  spans.forEach(([s1, e1], i) => {
+    spans.forEach(([s2, e2], j) => {
+      if (i !== j && s1 < e2 && s2 < e1) found.add(i);
+    });
+  });
+  return found;
+}
+
 // その日で一番長い睡眠（主な睡眠）。sleeps が1件以上あるときだけ呼ぶ
 function mainSleep(record) {
   return recordSleeps(record).reduce((best, s) => (sleepHours(s) > sleepHours(best) ? s : best));

@@ -133,18 +133,31 @@ function setSleepRows(sleeps) {
   updateSleepList();
 }
 
-// 睡眠の行が、まだ記録にならない理由（片方だけ・同じ時刻）。記録になる行・空の行は ''
-function sleepRowProblem({ start, end }) {
+// 睡眠の行が、まだ記録にならない理由（片方だけ・同じ時刻・ほかの睡眠と重なる）。記録になる行・空の行は ''
+function sleepRowProblem({ start, end }, overlapped) {
   if (!start && !end) return '';
   if (!start || !end) return '寝た時刻と起きた時刻の両方を入れてください';
-  return start === end ? '寝た時刻と起きた時刻は、違う時刻にしてください' : '';
+  if (start === end) return '寝た時刻と起きた時刻は、違う時刻にしてください';
+  return overlapped ? 'ほかの睡眠と時間が重なっています' : '';
+}
+
+// 記録になる睡眠：両方の時刻があって違う時刻で、ほかの睡眠と時間が重ならない件だけ
+function completeSleeps(sleeps) {
+  const valid = sleeps.filter(isValidSleep);
+  const overlaps = overlappingSleeps(valid);
+  return valid.filter((_, i) => !overlaps.has(i));
 }
 
 // 各行の睡眠時間と合計を表示し直す。＋ボタンは上限に達したら隠す
 function updateSleepList() {
   let total = 0;
-  [...sleepList.children].forEach((row, i) => {
-    const s = readSleepRow(row);
+  const rows = [...sleepList.children];
+  const values = rows.map(readSleepRow);
+  // 重なりは、両方の時刻がある行どうしで比べ、行の番号に直す
+  const validIndexes = values.flatMap((s, i) => (isValidSleep(s) ? [i] : []));
+  const overlapped = new Set([...overlappingSleeps(validIndexes.map((i) => values[i]))].map((k) => validIndexes[k]));
+  rows.forEach((row, i) => {
+    const s = values[i];
     const hours = isValidSleep(s) ? sleepHours(s) : 0;
     row.querySelector('.sleep-hours').textContent = hours ? formatHours(hours) : '';
     // 読み上げで行を区別できるよう、何件目かをラベルに入れる
@@ -153,11 +166,11 @@ function updateSleepList() {
     startInput.setAttribute('aria-label', `寝た時刻（${i + 1}件目）`);
     endInput.setAttribute('aria-label', `起きた時刻（${i + 1}件目）`);
     row.querySelector('.remove-sleep-btn').setAttribute('aria-label', `この睡眠を取り消す（${i + 1}件目）`);
-    // 片方だけ・同じ時刻の行は、その行のすぐ下に案内を出す（この行はまだ記録にならず、保存ボタンも押せる理由にならない）。
+    // 片方だけ・同じ時刻・ほかの睡眠と重なる行は、その行のすぐ下に案内を出す（この行はまだ記録にならず、保存ボタンも押せる理由にならない）。
     // 時刻の欄の説明にもつなぎ、読み上げでも伝わるようにする
     const hint = row.querySelector('.sleep-row-hint');
     hint.id = `sleep-row-hint-${i + 1}`;
-    hint.textContent = sleepRowProblem(s);
+    hint.textContent = sleepRowProblem(s, overlapped.has(i));
     hint.hidden = !hint.textContent;
     for (const input of [startInput, endInput]) {
       if (hint.hidden) input.removeAttribute('aria-describedby');
@@ -328,12 +341,12 @@ function isFormChanged(state, saved) {
 }
 
 // 保存ボタンの状態を決める材料。
-// canSave：変更があり、保存した後の記録に項目が1つ以上ある（睡眠の片方だけ・同じ時刻の行は、項目に数えない）
+// canSave：変更があり、保存した後の記録に項目が1つ以上ある（睡眠の片方だけ・同じ時刻・ほかの睡眠と重なる行は、項目に数えない）
 function formSaveState() {
   const saved = loadRecords()[currentKey];
   const state = readFormState();
   const changed = isFormChanged(state, saved);
-  const after = applyRecordEdit(saved, { ...state, sleeps: state.sleeps.filter(isValidSleep) }, RECORD_ITEM_KEYS);
+  const after = applyRecordEdit(saved, { ...state, sleeps: completeSleeps(state.sleeps) }, RECORD_ITEM_KEYS);
   return { changed, canSave: changed && after !== null, recorded: hasAnyEntry(saved) };
 }
 
@@ -527,6 +540,7 @@ function readForm() {
 
   // 両方空の行は「未入力」として捨てる。片方だけ・同じ時刻の行があれば、その欄へ案内する（勝手に捨てない）
   const sleeps = [];
+  const sleepRows = [];
   for (const row of sleepList.children) {
     const s = readSleepRow(row);
     if (s.start === '' && s.end === '') continue;
@@ -536,6 +550,14 @@ function readForm() {
       return null;
     }
     sleeps.push(s);
+    sleepRows.push(row);
+  }
+  // 睡眠どうしの時間が重なっていたら、最初に重なっている行へ案内する（どちらが正しいか分からないので、勝手に捨てない）
+  const overlaps = overlappingSleeps(sleeps);
+  if (overlaps.size) {
+    showFieldError('睡眠の時間が重なっています。寝た時刻と起きた時刻を直してください',
+      sleepRows[Math.min(...overlaps)].querySelector('.sleep-start'));
+    return null;
   }
 
   // 文字数は保存データの検査と同じ数え方で確かめる（古い Safari は入力欄の上限を別の数え方で守るため）
