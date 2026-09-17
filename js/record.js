@@ -626,11 +626,9 @@ function undoDelete(key, record) {
     showToast({ icon: '⚠️', text: saveErrorMessage(), duration: 6000 });
     return;
   }
-  if (key === currentKey) {
-    // 入力中なら、戻した記録と比べ直す（保存ボタン・書きかけを合わせる）。同じ中身なら変更なしになるので、戻した記録で開き直す
-    if (formDirty) markDirty();
-    if (!formDirty) fillForm(key);
-  }
+  // 表示中の日なら、入力中でも戻した記録で開き直す（削除の後に入れた保存していない入力は捨てる）。
+  // 入力を残すと、戻した記録（メモなど）が画面に出ないまま、保存で消えてしまうため（2026-09-17 ユーザーと決定）
+  if (key === currentKey) fillForm(key);
   showToast({ icon: '↩️', text: `${formatDateJa(key)}の記録を元に戻しました` });
 }
 
