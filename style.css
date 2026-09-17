@@ -365,7 +365,7 @@ input::-webkit-date-and-time-value { text-align: left; }
   font-variant-numeric: tabular-nums;
 }
 .sleep-hours:empty { display: none; }
-/* 時刻が片方だけ・同じ時刻の行の案内（record.js）。その行のすぐ下に、行の幅いっぱいで */
+/* 時刻が片方だけ・同じ時刻・ほかの睡眠と重なる行の案内（record.js）。その行のすぐ下に、行の幅いっぱいで */
 .sleep-row-hint {
   grid-column: 1 / 5;
   margin: 0;
