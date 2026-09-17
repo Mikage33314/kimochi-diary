@@ -22,7 +22,7 @@ let graphMode = 'week';
 let statKind = 'mean';
 let graphYear = new Date().getFullYear();
 let graphMonth = new Date().getMonth(); // 0〜11
-// 年ごとの表示で、記録がこれより少ない月は「参考程度に」として目立たせない
+// 年ごとの表示で、記録がこれより少ない月は「目安」として目立たせない
 // （少ない日数の平均ほど極端な値になり、一番目立つ点が一番あてにならなくなるため）
 const FEW_DAYS = 5;
 
@@ -324,14 +324,14 @@ function renderStats(days) {
     <div class="stat">
       <div class="stat-label">${label}</div>
       <div class="stat-value">${value}</div>
-      ${count ? `<div class="stat-days">${count}日分${fewIn(count) ? '・参考程度に' : ''}</div>` : ''}
+      ${count ? `<div class="stat-days">${count}日分${fewIn(count) ? '・目安' : ''}</div>` : ''}
     </div>`;
 
   const period = periodLabel(days);
-  // 「（少ないので参考程度に）」は、出すときは最初から次の行に置く（端末の幅によって文の途中で折り返し、「に）」だけが残らないように）
+  // 「（記録がまだ少ないので、目安として見てね）」は、出すときは最初から次の行に置く（端末の幅によって文の途中で折り返し、一部だけが残らないように。2026-09-17 ユーザーと決めた言い方）
   const noteEl = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text });
   statsNoteEl.replaceChildren(`${period}のうち ${recs.length}日 記録`);
-  if (fewIn(recs.length)) statsNoteEl.append(noteEl('span', 'stats-note-few', '（少ないので参考程度に）'));
+  if (fewIn(recs.length)) statsNoteEl.append(noteEl('span', 'stats-note-few', '（記録がまだ少ないので、目安として見てね）'));
   statsEl.innerHTML =
     card('気分の平均', score(moodAvg, MOODS), moods.length) +
     card('体調の平均', score(condAvg, CONDITIONS), conditions.length) +
@@ -445,7 +445,7 @@ statKindEl.addEventListener('click', (e) => {
 
 graphPrevBtn.addEventListener('click', () => moveGraphPeriod(-1));
 graphNextBtn.addEventListener('click', () => moveGraphPeriod(1));
-// 注記の「（参考程度に）」は、途中で改行して「に）」だけが次の行に残らないよう、ひとかたまりにする
-const fewNote = (text) => [text, Object.assign(document.createElement('span'), { className: 'nowrap', textContent: '（参考程度に）' })];
+// 注記の「（目安として見てね）」は、途中で改行して一部だけが次の行に残らないよう、ひとかたまりにする
+const fewNote = (text) => [text, Object.assign(document.createElement('span'), { className: 'nowrap', textContent: '（目安として見てね）' })];
 chartNoteEl.replaceChildren(...fewNote(`白抜きの点・淡い棒は、その項目の記録が${FEW_DAYS}日未満の月です`));
 document.getElementById('year-table-note').replaceChildren(...fewNote(`※ は、その項目の記録が${FEW_DAYS}日未満の月です`));

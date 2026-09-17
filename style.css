@@ -712,8 +712,8 @@ button.cal-cell:not([data-level]) { background: none; }
 
 /* 地の上に直接置く文字は、花の影の濃い所に重なっても 4.5:1 を保てる濃さ（--text-sub）にする */
 .stats-note { margin-bottom: 0; text-align: center; font-size: .8125rem; color: var(--text-sub); }
-/* 「（少ないので参考程度に）」は必ず次の行に、ひとかたまりで出す（graph.js） */
-.stats-note-few { display: block; }
+/* 「（記録がまだ少ないので、目安として見てね）」は必ず次の行に出す。狭い画面で2行になるときは、行の長さをそろえる（graph.js） */
+.stats-note-few { display: block; text-wrap: balance; }
 
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .stat {
