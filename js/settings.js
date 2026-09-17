@@ -298,3 +298,4 @@ deleteAllBtn.addEventListener('click', () => {
 });
 
 document.getElementById('share-url').textContent = APP_URL;
+document.getElementById('app-version').textContent = APP_VERSION;

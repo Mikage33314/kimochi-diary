@@ -1,6 +1,10 @@
 // ===== 共通部品：定数・選択肢の定義・日付と睡眠の計算・文字の整形 =====
 // 画面（DOM）にも保存（localStorage）にも依存しない関数だけを置く。保存まわりは storage.js
 
+// アプリの Version（設定の「このアプリ」に出す。テストの記録・問い合わせで、どの版かを確かめるため）。
+// 記録の形式の版（storage.js の DATA_VERSION）とは別のもの。公開するときに、ユーザーと決めた番号にする
+const APP_VERSION = '0.2';
+
 const MIN_DATE_KEY = '2000-01-01'; // 記録できる一番古い日
 const MIN_YEAR = Number(MIN_DATE_KEY.slice(0, 4)); // カレンダー・グラフで戻れる一番古い年
 const MAX_SLEEPS = 3;              // 1日に登録できる睡眠の最大件数
