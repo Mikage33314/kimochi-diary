@@ -637,6 +637,14 @@ function undoDelete(key, record) {
   showToast({ icon: '↩️', text: `${formatDateJa(key)}の記録を元に戻しました` });
 }
 
+// 別のタブで記録が変わったら、入力中でなければ表示中の日を最新の記録で開き直す（古い表示のまま入力して保存すると、
+// 別のタブで直した分を古い値に戻してしまうため。2026-09-17 ユーザーと決定）。
+// 入力中なら入力は消さず、保存ボタンと書きかけを新しい記録と比べ直すだけにする
+onRecordsChangedElsewhere(() => {
+  if (formDirty) markDirty();
+  else fillForm(currentKey);
+});
+
 // ----- 初期化 -----
 buildScale(document.getElementById('mood-scale'), 'mood', MOODS);
 buildScale(document.getElementById('condition-scale'), 'condition', CONDITIONS);

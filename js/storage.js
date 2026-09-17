@@ -362,6 +362,14 @@ function removeAllData() {
 }
 
 // ----- 書きかけ -----
+// 別のタブ・ウィンドウで記録（または形式の版）が書き換わったら、callback を呼ぶ。
+// storage イベントは、書き換えた側ではなく、ほかのタブにだけ届く。すべて消されたとき（clear）は key が null
+function onRecordsChangedElsewhere(callback) {
+  window.addEventListener('storage', (e) => {
+    if (e.key === null || e.key === STORAGE_KEY || e.key === DATA_VERSION_KEY) callback();
+  });
+}
+
 function saveDraft(draft) {
   writeItem(DRAFT_KEY, JSON.stringify(draft)); // 書けなくても入力は続けられる
 }
