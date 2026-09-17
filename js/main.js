@@ -24,6 +24,7 @@ function showView(name, { scrollTop = true } = {}) {
   }
   VIEW_RENDERERS[name]?.();
   if (scrollTop) window.scrollTo(0, 0);
+  positionToast(); // 出ているお知らせを、切り替えた画面の下の操作のすぐ上へ移す
 }
 
 // 日付が変わっていたら、記録画面の日付と、カレンダー・グラフを今日を含む月・期間に合わせる。

@@ -49,6 +49,7 @@
           <input type="date" id="date" required>
         </label>
 
+        <!-- 選んでいる顔をもう一度押すと、選択が外れる（record.js）。外せることは、選んでいるボタンの説明で読み上げる -->
         <fieldset class="field">
           <legend class="field-label">気分</legend>
           <div class="scale" id="mood-scale"></div>
@@ -58,6 +59,7 @@
           <legend class="field-label">体調</legend>
           <div class="scale" id="condition-scale"></div>
         </fieldset>
+        <p class="sr-only" id="scale-clear-hint">選択中。もう一度押すと外れます</p>
 
         <!-- aria-describedby：時刻の欄へ直接移ったときも、案内（どの夜〜朝か）が読み上げで伝わるように -->
         <fieldset class="field" aria-describedby="sleep-hint-text">
@@ -91,11 +93,16 @@
         </label>
 
         <!-- 保存ボタンは画面の下に貼りつき、スクロールしなくても押せる。エラーや「編集中」もここに出す。
-             エラーなどは読み上げる枠（status）、「編集中」は読み上げない枠（edit-state）。status に文があるときは edit-state を隠す -->
-        <div class="save-bar">
+             エラーなどは読み上げる枠（status）、「編集中」は読み上げない枠（edit-state）。status に文があるときは edit-state を隠す。
+             保存ボタンは、変更があり、記録する項目が1つ以上あるときだけ押せる（record.js）。
+             押せない理由は画面には出さず、読み上げ用の説明（save-hint）だけにする。
+             data-toast-anchor：お知らせ（トースト）をこの帯のすぐ上に出す（toast.js） -->
+        <div class="save-bar" data-toast-anchor>
           <p id="status" class="status" role="status"></p>
           <p id="edit-state" class="status"></p>
-          <button type="submit" class="save-btn">保存する</button>
+          <p class="sr-only" id="record-announce" role="status"></p>
+          <p class="sr-only" id="save-hint"></p>
+          <button type="submit" class="save-btn" id="save-btn" aria-describedby="save-hint">保存する</button>
         </div>
         <button type="button" class="delete-btn" id="delete-btn" hidden>この日の記録を削除</button>
       </form>
@@ -369,7 +376,8 @@
     </button>
   </nav>
 
-  <!-- 睡眠1件ぶんの行の雛形。画面には表示されず、JS で複製して使う -->
+  <!-- 睡眠1件ぶんの行の雛形。画面には表示されず、JS で複製して使う。
+       sleep-row-hint：時刻が片方だけ・同じ時刻のときに、その行のすぐ下に出す案内（record.js） -->
   <template id="sleep-row-template">
     <li class="sleep-row">
       <input type="time" class="sleep-start" aria-label="寝た時刻">
@@ -377,6 +385,7 @@
       <input type="time" class="sleep-end" aria-label="起きた時刻">
       <button type="button" class="remove-sleep-btn" aria-label="この睡眠を取り消す">✕</button>
       <span class="sleep-hours"></span>
+      <p class="sleep-row-hint" hidden></p>
     </li>
   </template>
 

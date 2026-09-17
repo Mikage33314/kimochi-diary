@@ -17,12 +17,17 @@ const sleepTemplate = document.getElementById('sleep-row-template');
 const addSleepBtn = document.getElementById('add-sleep');
 const sameSleepBtn = document.getElementById('same-sleep');
 const nudgeBtn = document.getElementById('yesterday-nudge');
+const saveBtn = document.getElementById('save-btn');
+const saveHintEl = document.getElementById('save-hint');             // 保存ボタンの読み上げ用の説明（押せない理由）
+const recordAnnounceEl = document.getElementById('record-announce'); // 見た目には出さず、読み上げだけで知らせる一言
 
 let currentKey = '';                        // フォームに表示中の日付
 let shownDefaultKey = '';                   // 「記録する日」の初期値として最後に使った日付
 let lastSeenToday = toDateKey(new Date());  // 日付が変わったかの判定用
-let formDirty = false;                      // 保存していない入力があるか
+let formDirty = false;                      // 保存していない入力があるか（isFormChanged の結果。markDirty で計算し直す）
 let prevSleeps = null;                      // 「前回と同じ」で入れる睡眠
+const selectedScale = { mood: null, condition: null }; // 押す前に選んでいた値（もう一度押したら外すため）
+const SCALE_NAMES = { mood: '気分', condition: '体調' };
 
 // ----- 5段階ボタン -----
 // 定義配列から5段階のラジオボタンを作る
@@ -42,7 +47,62 @@ function setRadio(name, value) {
   for (const el of recordForm.elements[name]) {
     el.checked = Number(el.value) === value;
   }
+  selectedScale[name] = toScore(value);
+  updateScaleHint(name);
 }
+
+// 選んでいるボタンにだけ「もう一度押すと外れます」の説明を付ける（ラジオボタンは本来外せない部品なので、読み上げで伝える）
+function updateScaleHint(name) {
+  for (const el of recordForm.elements[name]) {
+    if (el.checked) el.setAttribute('aria-describedby', 'scale-clear-hint');
+    else el.removeAttribute('aria-describedby');
+  }
+}
+
+// 選んでいる顔をもう一度押したら、選択を外す。読み上げの操作（ダブルタップ）で押したときも click が来る。
+// click は change より先に来るので、selectedScale は「押す前に選んでいた値」のまま比べられる
+function isRadio(el) {
+  return el instanceof HTMLInputElement && el.type === 'radio';
+}
+
+function clearScale(el) {
+  el.checked = false;
+  selectedScale[el.name] = null;
+  updateScaleHint(el.name);
+  markDirty();
+  recordStatusEl.textContent = '';
+  recordAnnounceEl.textContent = `${SCALE_NAMES[el.name]}の選択を外しました`;
+}
+
+let clearedByKey = false; // スペースキーで外した直後（続けて来る click で選び直さないように）
+
+recordForm.addEventListener('click', (e) => {
+  const el = e.target;
+  if (!isRadio(el)) return;
+  if (clearedByKey) {
+    e.preventDefault(); // click を取り消すと、ラジオボタンは押す前（外した状態）に戻る
+    return;
+  }
+  if (selectedScale[el.name] === toScore(el.value)) clearScale(el); // 別の顔を選んだときは change で記録する
+});
+
+// キーボード：選んでいるボタンでスペースキーを押しても click が来ないブラウザ（Chrome など）があるので、キーで受ける
+recordForm.addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (e.key !== ' ' || !isRadio(el) || !el.checked || selectedScale[el.name] !== toScore(el.value)) return;
+  e.preventDefault();
+  clearScale(el);
+  clearedByKey = true;
+});
+recordForm.addEventListener('keyup', (e) => {
+  if (e.key === ' ' && clearedByKey) setTimeout(() => { clearedByKey = false; }); // keyup の後に来る click まで待つ
+});
+
+recordForm.addEventListener('change', (e) => {
+  if (e.target.type !== 'radio') return;
+  selectedScale[e.target.name] = toScore(e.target.value);
+  updateScaleHint(e.target.name);
+});
 
 // ----- 睡眠リスト -----
 function readSleepRow(row) {
@@ -68,6 +128,13 @@ function setSleepRows(sleeps) {
   updateSleepList();
 }
 
+// 睡眠の行が、まだ記録にならない理由（片方だけ・同じ時刻）。記録になる行・空の行は ''
+function sleepRowProblem({ start, end }) {
+  if (!start && !end) return '';
+  if (!start || !end) return '寝た時刻と起きた時刻の両方を入れてください';
+  return start === end ? '寝た時刻と起きた時刻は、違う時刻にしてください' : '';
+}
+
 // 各行の睡眠時間と合計を表示し直す。＋ボタンは上限に達したら隠す
 function updateSleepList() {
   let total = 0;
@@ -76,9 +143,21 @@ function updateSleepList() {
     const hours = isValidSleep(s) ? sleepHours(s) : 0;
     row.querySelector('.sleep-hours').textContent = hours ? formatHours(hours) : '';
     // 読み上げで行を区別できるよう、何件目かをラベルに入れる
-    row.querySelector('.sleep-start').setAttribute('aria-label', `寝た時刻（${i + 1}件目）`);
-    row.querySelector('.sleep-end').setAttribute('aria-label', `起きた時刻（${i + 1}件目）`);
+    const startInput = row.querySelector('.sleep-start');
+    const endInput = row.querySelector('.sleep-end');
+    startInput.setAttribute('aria-label', `寝た時刻（${i + 1}件目）`);
+    endInput.setAttribute('aria-label', `起きた時刻（${i + 1}件目）`);
     row.querySelector('.remove-sleep-btn').setAttribute('aria-label', `この睡眠を取り消す（${i + 1}件目）`);
+    // 片方だけ・同じ時刻の行は、その行のすぐ下に案内を出す（この行はまだ記録にならず、保存ボタンも押せる理由にならない）。
+    // 時刻の欄の説明にもつなぎ、読み上げでも伝わるようにする
+    const hint = row.querySelector('.sleep-row-hint');
+    hint.id = `sleep-row-hint-${i + 1}`;
+    hint.textContent = sleepRowProblem(s);
+    hint.hidden = !hint.textContent;
+    for (const input of [startInput, endInput]) {
+      if (hint.hidden) input.removeAttribute('aria-describedby');
+      else input.setAttribute('aria-describedby', hint.id);
+    }
     total += hours;
   });
   sleepTotalEl.textContent = total ? `合計 ${formatHours(total)}` : '';
@@ -109,11 +188,9 @@ sleepList.addEventListener('click', (e) => {
   const removeBtn = e.target.closest('.remove-sleep-btn');
   if (!removeBtn) return;
   const row = removeBtn.closest('.sleep-row');
-  const s = readSleepRow(row);
   row.remove();
   updateSleepList();
-  // 空の行を足して取り消しただけなら、入力は変わっていない
-  if (s.start || s.end || formDirty) markDirty();
+  markDirty(); // 空の行を足して取り消しただけなら、変更なしのまま
   addSleepBtn.focus(); // 押したボタンが消えるので、フォーカスを「＋」へ移す
 });
 
@@ -212,10 +289,63 @@ function fillForm(dateKey) {
   // 「編集中」は読み上げない枠に出す。保存時のお知らせと二重に読み上げられないように
   editStateEl.textContent = recorded ? `${formatDateJa(dateKey)}の記録を編集中` : '';
   recordStatusEl.textContent = '';
+  recordAnnounceEl.textContent = '';
   formDirty = false;
   clearDraft(); // フォームを入れ替えたら、前の書きかけは要らない
   updateSameSleepBtn(records);
   updateDateInfo(records);
+  updateSaveButton();
+}
+
+// ----- 変更の判定と保存ボタン -----
+// 画面の入力を、保存と同じ形で読む（検査はしない）。
+// 睡眠は時刻が入っている行だけ（片方だけの行も含む）。メモ・頑張ったことは前後の空白を除く
+function readFormState() {
+  return {
+    mood: toScore(recordForm.elements.mood.value),
+    condition: toScore(recordForm.elements.condition.value),
+    sleeps: [...sleepList.children].map(readSleepRow).filter((s) => s.start || s.end),
+    memo: memoInput.value.trim(),
+    effort: effortInput.value.trim(),
+  };
+}
+
+// 保存済みの記録から変わっているか。「保存していない入力があるか」の判定は、すべてここを通す
+// （選んで外して元に戻したら、変更なしに戻る）。項目ごとに RECORD_ITEMS の equals で比べる。
+// メモは保存済みの方も前後の空白を除いて比べ、睡眠は片方だけの行も「変更」に数える
+function isFormChanged(state, saved) {
+  return RECORD_ITEM_KEYS.some((key) => {
+    const result = RECORD_ITEMS[key].normalize(saved?.[key]);
+    const before = 'value' in result ? result.value : null;
+    return !RECORD_ITEMS[key].equals(state[key], typeof before === 'string' ? before.trim() : before);
+  });
+}
+
+// 保存ボタンの状態を決める材料。
+// canSave：変更があり、保存した後の記録に項目が1つ以上ある（睡眠の片方だけ・同じ時刻の行は、項目に数えない）
+function formSaveState() {
+  const saved = loadRecords()[currentKey];
+  const state = readFormState();
+  const changed = isFormChanged(state, saved);
+  const after = applyRecordEdit(saved, { ...state, sleeps: state.sleeps.filter(isValidSleep) }, RECORD_ITEM_KEYS);
+  return { changed, canSave: changed && after !== null, recorded: hasAnyEntry(saved) };
+}
+
+// 押せないときは aria-disabled にする（disabled にすると、保存した直後にフォーカスがボタンから外れて迷子になるため）。
+// 押せない理由は画面に常には出さず、読み上げ用の説明だけにする
+function updateSaveButton(s = formSaveState()) {
+  saveBtn.setAttribute('aria-disabled', String(!s.canSave));
+  if (!s.canSave && s.recorded && !s.changed) {
+    const check = Object.assign(document.createElement('span'), { textContent: ' ✓' });
+    check.setAttribute('aria-hidden', 'true'); // 読み上げは「保存済み」だけにする
+    saveBtn.replaceChildren('保存済み', check);
+  } else {
+    saveBtn.textContent = '保存する';
+  }
+  saveHintEl.textContent = s.canSave ? ''
+    : !s.changed && s.recorded ? '変更はありません'
+      : s.recorded ? '記録する項目を1つ以上入れると保存できます。この日の記録を消すときは「この日の記録を削除」を押します'
+        : '記録する項目を1つ以上入れると保存できます';
 }
 
 // 保存していない入力があれば、捨ててよいか確かめる
@@ -230,17 +360,24 @@ function draftDiscardNote() {
 
 // ----- 書きかけの退避 -----
 // iPhone は、裏に回したアプリを予告なく終了させることがある。
-// 入力のたびに書きかけを退避し（storage.js の saveDraft）、次に開いたときに戻す
+// 入力のたびに書きかけを退避し（storage.js の saveDraft）、次に開いたときに戻す。
+// 保存済みの記録と同じに戻ったら、変更なしにして書きかけも消す
 function markDirty() {
-  formDirty = true;
-  saveDraft({
-    date: currentKey,
-    mood: toScore(recordForm.elements.mood.value),
-    condition: toScore(recordForm.elements.condition.value),
-    sleeps: [...sleepList.children].map(readSleepRow),
-    memo: memoInput.value,
-    effort: effortInput.value,
-  });
+  const s = formSaveState();
+  formDirty = s.changed;
+  if (formDirty) {
+    saveDraft({
+      date: currentKey,
+      mood: toScore(recordForm.elements.mood.value),
+      condition: toScore(recordForm.elements.condition.value),
+      sleeps: [...sleepList.children].map(readSleepRow),
+      memo: memoInput.value,
+      effort: effortInput.value,
+    });
+  } else {
+    clearDraft();
+  }
+  updateSaveButton(s);
 }
 
 // 書きかけをフォームに戻す（fillForm でその日を開いたあとに呼ぶ）
@@ -252,8 +389,8 @@ function restoreDraft(d) {
   effortInput.value = d.effort;
   syncGrow(memoInput);
   syncGrow(effortInput);
-  markDirty(); // fillForm で消えた退避を書き直す
-  recordStatusEl.textContent = '保存していない入力を戻しました';
+  markDirty(); // fillForm で消えた退避を書き直す（保存済みと同じ中身なら、変更なしのまま）
+  if (formDirty) recordStatusEl.textContent = '保存していない入力を戻しました';
 }
 
 // すべて削除したあとなどに、記録画面を起動したときの状態に戻す
@@ -306,6 +443,7 @@ for (const type of ['input', 'change']) {
     if (e.target === dateInput) return;
     markDirty();
     recordStatusEl.textContent = '';
+    recordAnnounceEl.textContent = '';
   });
 }
 
@@ -374,16 +512,13 @@ function showFieldError(message, focusEl) {
   focusEl.focus({ preventScroll: true });
 }
 
-// 入力を検査して、保存する形にする。問題があればエラーを出して null
+// 入力を検査して、保存する形にする。問題があればエラーを出して null。
+// 記録の項目はすべて任意なので、選んでいない気分・体調は null のまま渡す（applyRecordEdit がその項目を消す）
 function readForm() {
   const mood = toScore(recordForm.elements.mood.value);
   const condition = toScore(recordForm.elements.condition.value);
-  if (!mood || !condition) {
-    showFieldError('気分と体調を選んでください', recordForm.elements[mood ? 'condition' : 'mood'][0]);
-    return null;
-  }
 
-  // 両方空の行は「未入力」として捨てる。片方だけ・同じ時刻の行があれば、その欄へ案内する
+  // 両方空の行は「未入力」として捨てる。片方だけ・同じ時刻の行があれば、その欄へ案内する（勝手に捨てない）
   const sleeps = [];
   for (const row of sleepList.children) {
     const s = readSleepRow(row);
@@ -412,6 +547,8 @@ function readForm() {
 
 recordForm.addEventListener('submit', (e) => {
   e.preventDefault(); // フォーム送信によるページ再読み込みを止める
+  // 押せない状態（変更なし・記録する項目なし）では保存しない。日付欄で Enter を押したときなども、ここで止まる
+  if (!formSaveState().canSave) return;
   const input = readForm();
   if (!input) return;
 

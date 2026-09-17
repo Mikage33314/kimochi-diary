@@ -8,20 +8,20 @@
 // ファイルを増やしたら tools/stamp-sw.mjs の APP_FILES に足す（tests/test-pwa.mjs が漏れを確かめる）
 
 // ===== 更新印ここから（tools/stamp-sw.mjs が書き換える。手で直さない） =====
-const CACHE_NAME = 'kimochi-diary-f1f18650495f';
+const CACHE_NAME = 'kimochi-diary-dffd98d07526';
 const APP_FILES = {
-  './': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
-  'index.html': 'c9e16f11a24229b2f3292851fa7765dae035d079b56cde95182fccf53c3841b1',
-  'style.css': '705a8d166047ed8a1fff47ba7cc2cddfc189965fd7f6f3dd87b063b68a712676',
+  './': 'c3242f2cfb2c7951f5eedde435818a191d36ca95605a65d62840a9ad90484015',
+  'index.html': 'c3242f2cfb2c7951f5eedde435818a191d36ca95605a65d62840a9ad90484015',
+  'style.css': '3731ac09790b21e04f15d130624e73facb1d0ce10bcdcd8a1b4ee6d56e5ce0ae',
   'manifest.webmanifest': '77207f237ebc14db658fc8d1882cf6c857148a5905f9f5a452eb291e9fe1f501',
   'js/common.js': 'cde5743fa4d5e49e9caf2ea3ce5483c33f7f988dd60a80212939ec6cd50179ae',
   'js/storage.js': '9140651c63291a4f157889e990abb3dfd97ec50c249e76bc5dd12ee571d143b2',
-  'js/toast.js': 'a402f0897b19bc023842ebe06a612ad51923cd71e02e4a1b185f64643af17fbf',
-  'js/record.js': '206d1da92de98c3447ff7e2e2d9a76a01d05200c0ecc33840bc365fce1874816',
+  'js/toast.js': '87d69099a46f32dfe419b370668161fc2927e32e57785197e353138616b939f7',
+  'js/record.js': 'bcefe0ee634f19ddab09ba140203cb3cfde45470f1fb1052bd472c2013019619',
   'js/calendar.js': '361a5b162e904801c0cec6631fa3c9cd8ac3c2bf0b763effad3d641cc286a3be',
   'js/graph.js': '2f17139eaae2044a450d46a06454a82f35d802f4b26bf2d69b5cd178e399b4be',
   'js/settings.js': '3ebfcfcc2c90aed18fdb2591666b6876e0e640a502bb9d07aebc45e86437b60a',
-  'js/main.js': '158c760e5f87a5da205bd04a2c9a5db68cc2160f0e4f8ff4f70c6b34324c3514',
+  'js/main.js': 'ec314f45a1d4203f80d051d8d2b565981b315676fa1f320098de05469d83d2fd',
   'images/botanical-shadow.webp': 'aa4c3b29a2f512707192756ebffab2f428e94baf95ce7bd385b73ac715ab5d51',
   'icons/icon.svg': '2be433dd9f88ebde51bcfbe6036e2191f496c1b9015fe5a76b9785c8336518d1',
   'icons/icon-192.png': '30c2e78570d71409f654b9a2bbfb36dec0365f4049325f99dd9e2d804a801b01',
