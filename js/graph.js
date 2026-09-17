@@ -328,7 +328,10 @@ function renderStats(days) {
     </div>`;
 
   const period = periodLabel(days);
-  statsNoteEl.textContent = `${period}のうち ${recs.length}日 記録${fewIn(recs.length) ? '（少ないので参考程度に）' : ''}`;
+  // 「（少ないので参考程度に）」は、出すときは最初から次の行に置く（端末の幅によって文の途中で折り返し、「に）」だけが残らないように）
+  const noteEl = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text });
+  statsNoteEl.replaceChildren(`${period}のうち ${recs.length}日 記録`);
+  if (fewIn(recs.length)) statsNoteEl.append(noteEl('span', 'stats-note-few', '（少ないので参考程度に）'));
   statsEl.innerHTML =
     card('気分の平均', score(moodAvg, MOODS), moods.length) +
     card('体調の平均', score(condAvg, CONDITIONS), conditions.length) +
