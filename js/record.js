@@ -643,6 +643,13 @@ function undoDelete(key, record) {
   // 表示中の日なら、入力中でも戻した記録で開き直す（削除の後に入れた保存していない入力は捨てる）。
   // 入力を残すと、戻した記録（メモなど）が画面に出ないまま、保存で消えてしまうため（2026-09-17 ユーザーと決定）
   if (key === currentKey) fillForm(key);
+  else {
+    // 別の日を表示中なら入力はそのままにし、戻した記録で変わる案内（「昨日の分もつける？」「前回と同じ」）だけ直す
+    updateSameSleepBtn(records);
+    updateDateInfo(records);
+  }
+  // 削除の後にほかの画面（カレンダー・グラフ・設定）へ移っていたら、戻した記録で描き直す（「元に戻しました」と出たのに、日数や詳細が消えたままにならないように）
+  if (currentView !== 'record') showView(currentView, { scrollTop: false });
   showToast({ icon: '↩️', text: `${formatDateJa(key)}の記録を元に戻しました` });
 }
 
