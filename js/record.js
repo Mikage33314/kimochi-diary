@@ -444,9 +444,10 @@ function refreshToday() {
   if (newDefault !== shownDefaultKey) {
     const wasOnDefault = currentKey === shownDefaultKey;
     shownDefaultKey = newDefault;
-    // 前の初期値のまま何も入力していなければ、新しい日へ移す。入力中なら消さずに知らせるだけ。
-    // 自分で別の日を開いていたときは、そのままにする
-    if (wasOnDefault && !formDirty) {
+    // 何も入力していなければ、どの日を開いていても新しい日へ移す（過去の日を開いたまま日がたち、
+    // 今日の記録だと思って前の日を直さないように。2026-09-17 ユーザーと決定）。
+    // 入力中なら消さない。前の初期値の日で入力中なら、日付が変わったことを知らせる
+    if (!formDirty) {
       fillForm(newDefault);
       return dayChanged;
     }
