@@ -298,6 +298,19 @@ function truncateText(str, max) {
   return str.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
 }
 
+// 気分・体調の平均の表示。数値は小数第1位までで、四捨五入せずに切り捨てる（3.45 → "3.4"）。
+// 顔は平均を四捨五入して選ぶ（scoreOption）。数値を切り捨てにすると、表示が x.5 になったときに顔が変わるので、
+// 「😐 3.5」のように顔と数値が食い違わない。
+// 小数の計算の誤差（2.3 が 2.2999… になる）で1つ下にならないよう、わずかに足してから切り捨てる
+function formatScore(avg) {
+  return (Math.floor(avg * 10 + 1e-9) / 10).toFixed(1);
+}
+
+// 平均に近い段階の選択肢（顔と名前）。四捨五入で選ぶ
+function scoreOption(avg, options) {
+  return options[Math.round(avg) - 1];
+}
+
 // 数値の平均。空なら null
 function average(nums) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;

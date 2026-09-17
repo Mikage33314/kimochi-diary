@@ -72,7 +72,7 @@ function renderCalendar() {
 
   // 平均は、表示中の項目の値がある日だけで出し、その日数を添える（記録のある日数を分母にしない）
   const avg = average(levels);
-  const avgText = levels.length ? `${kind.options[Math.round(avg) - 1].icon} ${avg.toFixed(1)}（${levels.length}日）` : '—';
+  const avgText = levels.length ? `${scoreOption(avg, kind.options).icon} ${formatScore(avg)}（${levels.length}日）` : '—';
   calSummaryEl.textContent = recordedDays
     ? `記録 ${recordedDays}日 ・ 平均の${kind.name} ${avgText}`
     : 'この月の記録はまだありません';

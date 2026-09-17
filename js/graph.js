@@ -316,7 +316,7 @@ function renderStats(days) {
   const bedtime = isMedian ? medianBedtime(bedtimes) : averageBedtime(bedtimes);
 
   // 平均値を四捨五入して、近い顔アイコンを添える
-  const score = (avg, list) => (avg == null ? '—' : `${list[Math.round(avg) - 1].icon} ${avg.toFixed(1)}`);
+  const score = (avg, list) => (avg == null ? '—' : `${scoreOption(avg, list).icon} ${formatScore(avg)}`);
   // 月ごと・年ごとで記録が少ないときは、平均があてにならないことを添える（7日は少なくて当たり前なので添えない）
   const fewIn = (n) => graphMode !== 'week' && isFew(n);
   // count はその項目の値がある日数。0日なら数値も日数も出さない
@@ -336,7 +336,7 @@ function renderStats(days) {
     card(isMedian ? '就寝時刻の中央値' : '平均の就寝時刻', bedtime ?? '—', bedtime == null ? 0 : withSleep.length);
 
   // 読み上げ用に、グラフの内容を文章でも持たせる（絵としてのグラフの代わり）
-  const avgText = (avg, count) => (avg == null ? 'なし' : `${avg.toFixed(1)}（${count}日）`);
+  const avgText = (avg, count) => (avg == null ? 'なし' : `${formatScore(avg)}（${count}日）`);
   moodChartEl.setAttribute('aria-label',
     `気分と体調の推移（${period}、記録${recs.length}日）。気分の平均${avgText(moodAvg, moods.length)}、体調の平均${avgText(condAvg, conditions.length)}`);
   sleepChartEl.setAttribute('aria-label',
@@ -349,7 +349,7 @@ function renderStats(days) {
 function yearMoodSummary(points) {
   const months = points
     .filter((p) => p.mood != null && !isFewMood(p))
-    .map((p) => ({ name: `${p.month + 1}月`, mood: Number(p.mood.toFixed(1)) }));
+    .map((p) => ({ name: `${p.month + 1}月`, mood: Number(formatScore(p.mood)) }));
   if (months.length < 2) return '';
   const moods = months.map((m) => m.mood);
   const low = Math.min(...moods);
@@ -365,7 +365,7 @@ function yearMoodSummary(points) {
 function renderYearTable(points) {
   const now = new Date();
   const lastMonth = graphYear === now.getFullYear() ? now.getMonth() : 11;
-  const num = (v) => (v == null ? '—' : v.toFixed(1));
+  const num = (v) => (v == null ? '—' : formatScore(v));
   const mark = (few) => (few ? '※' : '');
   yearTableBody.innerHTML = points.slice(0, lastMonth + 1).map((p) => `
     <tr>
