@@ -230,8 +230,10 @@ undoImportBtn.addEventListener('click', () => {
     return;
   }
   const current = countRecordedDays(loadRecords());
-  const message = `読み込む前の記録（${countRecordedDays(before.records)}日分）に戻します。\n今の記録（${current}日分）は置き換わります。よろしいですか？`;
+  const message = `読み込む前の記録（${countRecordedDays(before.records)}日分）に戻します。\n今の記録（${current}日分）は置き換わり、元には戻せません。よろしいですか？`;
   if (!confirm(message + draftDiscardNote())) return;
+  // 戻した後は取り消せない（読み込んでから長く使った記録が、押し間違いで消えないように）ので、すべて削除と同じく二重に確かめる
+  if (!confirm(`本当に戻しますか？\n今の記録（${current}日分）は、二度と見られなくなります。先に「書き出す」で保管しておくと安心です。`)) return;
 
   if (!saveRecords(before.records)) {
     settingsStatusEl.textContent = saveErrorMessage();
